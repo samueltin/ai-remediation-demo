@@ -14,11 +14,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class TradeValidator {
 
-    static final Set<String> SUPPORTED_CURRENCIES = Set.of("USD", "EUR", "GBP", "JPY", "CHF");
-
     // Below zero is allowed because EUR, CHF and JPY swaps traded at negative fixed rates from about 2015 to 2021.
     static final BigDecimal MIN_FIXED_RATE = new BigDecimal("-1.00");
     static final BigDecimal MAX_FIXED_RATE = new BigDecimal("20.00");
+
+    private final Set<String> supportedCurrencies;
+
+    public TradeValidator(ReferenceData referenceData) {
+        this.supportedCurrencies = Set.copyOf(referenceData.getSupportedCurrencies());
+    }
 
     public List<String> validate(Trade trade) {
         List<String> errors = new ArrayList<>();
@@ -38,7 +42,7 @@ public class TradeValidator {
 
         if (trade.currency() == null) {
             errors.add("currency is required");
-        } else if (!SUPPORTED_CURRENCIES.contains(trade.currency())) {
+        } else if (!supportedCurrencies.contains(trade.currency())) {
             errors.add("currency " + trade.currency() + " is not supported");
         }
 

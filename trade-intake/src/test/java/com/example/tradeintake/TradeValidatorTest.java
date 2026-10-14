@@ -8,7 +8,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-// Plain JUnit test: the validator has no Spring dependencies, so no application context is needed.
+// Plain JUnit test: no Spring context is needed, but the real reference data file is loaded.
 class TradeValidatorTest {
 
     private static final BigDecimal NOTIONAL = new BigDecimal("10000000");
@@ -16,7 +16,7 @@ class TradeValidatorTest {
     private static final LocalDate START = LocalDate.of(2026, 1, 15);
     private static final LocalDate MATURITY = LocalDate.of(2031, 1, 15);
 
-    private final TradeValidator validator = new TradeValidator();
+    private final TradeValidator validator = new TradeValidator(new ReferenceDataConfig().referenceData());
 
     private static Trade trade(BigDecimal notional, String currency, BigDecimal fixedRate,
                                LocalDate startDate, LocalDate maturityDate) {

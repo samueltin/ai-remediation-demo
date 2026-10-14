@@ -13,10 +13,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
-// @WebMvcTest loads only the web layer, so the real validator and store are imported
-// rather than mocked: the test then covers the actual rules end to end.
+// @WebMvcTest loads only the web layer, so the real validator, reference data and store
+// are imported rather than mocked: the test then covers the actual rules end to end.
 @WebMvcTest(TradeController.class)
-@Import({TradeValidator.class, TradeStore.class})
+@Import({TradeValidator.class, ReferenceDataConfig.class, TradeStore.class})
 class TradeControllerTest {
 
     @Autowired
