@@ -15,6 +15,21 @@
   ],
   "java.configuration.updateBuildConfiguration": "automatic",
 
+  // Pin JDK 17 for this project only, to match the target team.
+  // The Java extension builds with it, and every terminal opened in this
+  // workspace gets it, so "mvn" uses 17 rather than the machine default.
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-17",
+      "path": "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home",
+      "default": true
+    }
+  ],
+  "terminal.integrated.env.osx": {
+    "JAVA_HOME": "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home",
+    "PATH": "/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home/bin:${env:PATH}"
+  },
+
   // Python: use the orchestrator's own virtual environment.
   "python.defaultInterpreterPath": "${workspaceFolder}/orchestrator/.venv/bin/python",
   "python.terminal.activateEnvironment": true,
