@@ -14,7 +14,8 @@ from pathlib import Path
 SEVERITIES = ("CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN")
 _VERSION = r"[A-Za-z0-9][A-Za-z0-9._+-]*"
 PATTERNS = {
-    "ticket_id": r"[A-Z][A-Z0-9]*-[0-9]+",
+    # Only security tickets: the workflow must not be pointed at arbitrary work items.
+    "ticket_id": r"SEC-[0-9]+",
     "severity": "|".join(SEVERITIES),
     "cve_id": r"CVE-[0-9]{4}-[0-9]{4,}",
     "library": r"[A-Za-z0-9._-]+:[A-Za-z0-9._-]+",

@@ -32,6 +32,20 @@ and each ticket targets one finding. The workflow therefore compares scans befor
 after as sets of (CVE ID, package, installed version): the ticket's finding must be gone
 and no finding may be new. It never compares counts.
 
+## Safety model
+
+Two layers, and neither trusts the agent's own report:
+
+- **Permissions limit what the agent can do.** It runs in a copy of the service outside this
+  repository, may only edit files there and run `mvn`, and has no network or git access
+  through its tools.
+- **Guardrails verify what it actually changed.** After the agent finishes, the workflow
+  runs the tests itself, inspects the git diff, compares the test count with the baseline
+  and scans again. Any failure stops the run for a human.
+
+Ticket text is untrusted input. Structured fields are validated strictly, and free text is
+passed to the agent inside a delimited data section that it is told to treat as data only.
+
 ## Setup
 
 ```

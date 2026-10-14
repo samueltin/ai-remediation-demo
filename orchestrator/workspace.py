@@ -55,3 +55,12 @@ def init_git(workspace: Path, ticket_id: str) -> str:
     with open(workspace / ".git" / "info" / "exclude", "a") as exclude:
         exclude.write("/target/\n")
     return branch
+
+
+def has_changes(workspace: Path) -> bool:
+    return bool(run(["git", "status", "--porcelain"], cwd=workspace).strip())
+
+
+def commit_change(workspace: Path, message: str) -> None:
+    run(["git", "add", "--all"], cwd=workspace)
+    run(["git", "commit", "--quiet", "-m", message], cwd=workspace)

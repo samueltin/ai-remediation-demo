@@ -2,7 +2,7 @@ import subprocess
 
 import pytest
 
-from workspace import WorkspaceError, create_workspace, init_git
+from workspace import WorkspaceError, commit_change, create_workspace, has_changes, init_git
 
 
 def make_service(tmp_path):
@@ -61,6 +61,20 @@ def test_git_has_committed_baseline_on_fix_branch(tmp_path):
     assert git(workspace, "rev-parse", "--abbrev-ref", "HEAD") == "fix/SEC-1"
     assert git(workspace, "log", "--format=%s") == "SEC-1: baseline before remediation"
     assert git(workspace, "status", "--porcelain") == ""
+
+
+def test_agent_change_is_committed_on_the_fix_branch(tmp_path):
+    repo, service = make_service(tmp_path)
+    workspace = create_workspace(service, tmp_path / "ws" / "SEC-1", repo)
+    init_git(workspace, "SEC-1")
+    assert not has_changes(workspace)
+
+    (workspace / "pom.xml").write_text("<project><version>2</version></project>")
+    assert has_changes(workspace)
+    commit_change(workspace, "SEC-1: Upgrade example-lib")
+
+    assert not has_changes(workspace)
+    assert git(workspace, "log", "--format=%s", "main..fix/SEC-1") == "SEC-1: Upgrade example-lib"
 
 
 def test_maven_build_output_is_not_part_of_the_diff(tmp_path):

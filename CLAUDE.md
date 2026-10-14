@@ -62,6 +62,7 @@ ai-remediation-demo/
     remediate.py            entry point
     ticket.py, workspace.py, scanner.py, agents.py, guardrails.py, summary.py
     commands.py             runs external commands (git, trivy, mvn) with timeouts
+    maven.py                JDK check, mvn test, Surefire report counts
     prompt_template.txt
     tests/                  pytest tests for the orchestrator
   tickets/                  JSON files that mock security tickets
@@ -121,6 +122,19 @@ Ticket and summary decisions:
 - The ticket link is built from `ticket_id` and marked `demo-shortcut:` (production: issue tracker URL).
   No extra ticket field for it.
 - Trivy is the single source of severity. The summary says "severity as reported by the scanner".
+
+Build and test decisions:
+- Maven must run on JDK 17; the orchestrator checks `mvn -v` first and stops with FAILED otherwise.
+- The baseline test count for guardrail 9 is measured live: the orchestrator runs `mvn test` on the
+  untouched workspace before the agent starts. If the baseline is not green, the run stops with FAILED.
+
+Prompt injection defences:
+- Ticket fields are validated strictly on load: `ticket_id` matches `SEC-<digits>`, `library` matches
+  `groupId:artifactId`, versions match a version pattern, no newlines in structured fields.
+- Free text from the ticket (title, description, acceptance criteria) and build output go into
+  clearly delimited data sections of the prompt. The instructions tell the agent to treat them as
+  data only. Ticket text that contains a section marker is rejected.
+- Permissions limit what the agent can do; guardrails verify what it actually changed.
 
 ## 7. Engineering Rules
 

@@ -10,14 +10,24 @@ Copilot CLI 1.0.97. Both still allow read-only shell commands such as ls inside 
 """
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from string import Template
 
 from commands import run
-from ticket import Ticket
+from ticket import Ticket, TicketError
 
 PROMPT_TEMPLATE = Path(__file__).resolve().parent / "prompt_template.txt"
+SECTION_MARKER = re.compile(r"</?\s*(ticket_data|build_output)\s*>", re.IGNORECASE)
+RETRY_TEMPLATE = Template("""
+A previous attempt left the workspace in its current state. The workflow then ran mvn test
+itself and the build failed. Continue from the current state. The build errors were:
+
+<build_output>
+$errors
+</build_output>
+""")
 AGENT_TIMEOUT_SECONDS = 1800
 CLAUDE_MAX_BUDGET_USD = "5"
 
@@ -36,9 +46,20 @@ class AgentResult:
     model: str
 
 
-def build_prompt(ticket: Ticket) -> str:
+def build_prompt(ticket: Ticket, previous_errors: tuple[str, ...] = ()) -> str:
+    """The agent prompt. Ticket free text and build output only ever appear inside data sections."""
+    for text in (ticket.title, ticket.description, *ticket.acceptance_criteria):
+        if SECTION_MARKER.search(text):
+            raise TicketError(f"{ticket.ticket_id}: ticket text contains a prompt data section marker")
+    previous_attempt = ""
+    if previous_errors:
+        # Build output can echo text the agent wrote, so markers are removed rather than trusted.
+        errors = "\n".join(SECTION_MARKER.sub("", line) for line in previous_errors)
+        previous_attempt = RETRY_TEMPLATE.substitute(errors=errors)
+
     template = Template(PROMPT_TEMPLATE.read_text())
     return template.substitute(
+        previous_attempt=previous_attempt,
         ticket_id=ticket.ticket_id,
         title=ticket.title,
         cve_id=ticket.cve_id,
