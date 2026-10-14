@@ -1,0 +1,19 @@
+{
+  "ticket_id": "SEC-102",
+  "title": "Upgrade snakeyaml to fix CVE-2022-1471",
+  "severity": "HIGH",
+  "cve_id": "CVE-2022-1471",
+  "library": "org.yaml:snakeyaml",
+  "current_version": "1.33",
+  "target_version": "2.4",
+  "service": "trade-intake",
+  "description": "The dependency scan of trade-intake reports SnakeYAML 1.33. Its Constructor can create arbitrary Java types named in a YAML document, which allows remote code execution when the YAML is not trusted. SnakeYAML 2.0 changed the Constructor API to require LoaderOptions and restricts global tags by default. Version 2.4 is the version managed by Spring Boot 3.5, so the service stays aligned with the platform.",
+  "acceptance_criteria": [
+    "org.yaml:snakeyaml is at version 2.4 in pom.xml",
+    "The dependency scan no longer reports CVE-2022-1471",
+    "The dependency scan reports no new findings compared with the scan before the change",
+    "mvn test passes",
+    "No files under src/test are changed",
+    "No other dependencies are added, removed or changed"
+  ]
+}

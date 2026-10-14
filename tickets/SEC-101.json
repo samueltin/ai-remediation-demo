@@ -1,0 +1,19 @@
+{
+  "ticket_id": "SEC-101",
+  "title": "Upgrade commons-text to fix CVE-2022-42889 (Text4Shell)",
+  "severity": "CRITICAL",
+  "cve_id": "CVE-2022-42889",
+  "library": "org.apache.commons:commons-text",
+  "current_version": "1.9",
+  "target_version": "1.10.0",
+  "service": "trade-intake",
+  "description": "The dependency scan of trade-intake reports Apache Commons Text 1.9. Versions 1.5 to 1.9 enable the script, dns and url lookups in variable interpolation by default, so untrusted input passed to the interpolator can lead to remote code execution. Version 1.10.0 disables these lookups by default.",
+  "acceptance_criteria": [
+    "org.apache.commons:commons-text is at version 1.10.0 in pom.xml",
+    "The dependency scan no longer reports CVE-2022-42889",
+    "The dependency scan reports no new findings compared with the scan before the change",
+    "mvn test passes",
+    "No files under src/test are changed",
+    "No other dependencies are added, removed or changed"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "ticket_id": "SEC-103",
+  "title": "Upgrade Guava to fix CVE-2023-2976",
+  "severity": "MEDIUM",
+  "cve_id": "CVE-2023-2976",
+  "library": "com.google.guava:guava",
+  "current_version": "20.0",
+  "target_version": "33.7.2-jre",
+  "service": "trade-intake",
+  "description": "The dependency scan of trade-intake reports Guava 20.0. FileBackedOutputStream creates temporary files with default permissions, so other users on a Unix host can read buffered data. Fixed in 32.0.0. The same upgrade also resolves CVE-2018-10237 and CVE-2020-8908.",
+  "acceptance_criteria": [
+    "com.google.guava:guava is at version 33.7.2-jre in pom.xml",
+    "The dependency scan no longer reports CVE-2023-2976",
+    "The dependency scan reports no new findings compared with the scan before the change",
+    "mvn test passes",
+    "No files under src/test are changed",
+    "No other dependencies are added, removed or changed"
+  ]
+}
