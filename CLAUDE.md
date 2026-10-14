@@ -61,6 +61,7 @@ ai-remediation-demo/
     .venv/                  local virtual environment (gitignored)
     remediate.py            entry point
     ticket.py, workspace.py, scanner.py, agents.py, guardrails.py, summary.py
+    commands.py             runs external commands (git, trivy, mvn) with timeouts
     prompt_template.txt
     tests/                  pytest tests for the orchestrator
   tickets/                  JSON files that mock security tickets
@@ -83,6 +84,9 @@ repo (for example `/tmp/remediation-workspaces/<ticket-id>-<timestamp>/`), initi
 there, and runs the agent in that workspace only. The baseline in `trade-intake/` always keeps
 the vulnerable versions so the demo can be re-run.
 
+The copy excludes `trade-intake/target/`: build output is not source, and Trivy would also
+scan any built jar and report findings twice.
+
 ## 5. The Sample App: trade-intake
 
 - One REST endpoint: `POST /trades` accepting a simplified interest rate swap trade
@@ -97,13 +101,26 @@ the vulnerable versions so the demo can be re-run.
 | # | Guardrail | Risk it controls |
 |---|---|---|
 | 1 | Agent may not modify any file under `src/test/` | Agent passes by weakening tests |
-| 2 | Only the ticket's library version may change in pom.xml; no added or removed dependencies | Hallucinated or malicious packages |
+| 2 | The only allowed change to pom.xml is the version of the ticket's library; any other pom.xml change fails | Hallucinated or malicious packages; skipping or excluding tests through build config |
 | 3 | Maximum 3 agent attempts per ticket | Endless loops and runaway cost |
 | 4 | Diff size limit (default 50 changed lines) | Unexpectedly wide changes |
 | 5 | Scan before and after; the finding is gone and no new findings appear | Fix that does not really fix |
 | 6 | Ticket ID in branch name, commit message and summary | Lost traceability |
 | 7 | Agent transcript saved | No audit trail |
 | 8 | The workflow NEVER merges | Bypassing human approval |
+| 9 | Tests run must equal the baseline count and none may be skipped (read from the Surefire reports by the orchestrator) | Green build because tests were disabled, not because they passed |
+
+Scan comparison (guardrail 5):
+- Compare findings before and after as sets of (CVE ID, package, installed version), never by count.
+- The ticket's finding (its CVE in its library, at any version) must be absent after the change,
+  and (after minus before) must be empty.
+- The baseline intentionally contains other findings from Spring Boot managed libraries.
+  They are out of scope for every ticket and must not be "fixed" by the agent.
+
+Ticket and summary decisions:
+- The ticket link is built from `ticket_id` and marked `demo-shortcut:` (production: issue tracker URL).
+  No extra ticket field for it.
+- Trivy is the single source of severity. The summary says "severity as reported by the scanner".
 
 ## 7. Engineering Rules
 
