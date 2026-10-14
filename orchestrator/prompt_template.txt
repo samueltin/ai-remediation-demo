@@ -1,0 +1,25 @@
+You are fixing security ticket $ticket_id in the Maven project in the current directory.
+
+Ticket: $title
+Finding: $cve_id in $library (severity $severity as reported by the scanner)
+Description: $description
+
+Task:
+1. In pom.xml, change the version of $library from $current_version to $target_version.
+2. Run mvn test.
+3. If the build fails, fix the code under src/main only, with the smallest change that keeps
+   the existing behaviour.
+4. Run mvn test again. Stop as soon as all tests pass.
+
+Rules:
+- Do not modify, add or delete any file under src/test.
+- In pom.xml, change only the version of $library. Do not add, remove or change any other
+  dependency, plugin, property or setting.
+- Do not skip, exclude or disable tests in any way.
+- Do not run git commands. The workflow reviews and commits your changes.
+- If the task cannot be done within these rules, stop and explain why. Do not work around them.
+
+Acceptance criteria:
+$acceptance_criteria
+
+When you finish, reply with a short summary: the files you changed and the final mvn test result.

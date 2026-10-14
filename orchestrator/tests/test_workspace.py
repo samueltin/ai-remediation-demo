@@ -61,3 +61,14 @@ def test_git_has_committed_baseline_on_fix_branch(tmp_path):
     assert git(workspace, "rev-parse", "--abbrev-ref", "HEAD") == "fix/SEC-1"
     assert git(workspace, "log", "--format=%s") == "SEC-1: baseline before remediation"
     assert git(workspace, "status", "--porcelain") == ""
+
+
+def test_maven_build_output_is_not_part_of_the_diff(tmp_path):
+    repo, service = make_service(tmp_path)
+    workspace = create_workspace(service, tmp_path / "ws" / "SEC-1", repo)
+    init_git(workspace, "SEC-1")
+
+    (workspace / "target" / "classes").mkdir(parents=True)
+    (workspace / "target" / "classes" / "App.class").write_text("bytes")
+
+    assert git(workspace, "status", "--porcelain") == ""

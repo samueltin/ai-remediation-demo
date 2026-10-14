@@ -51,4 +51,7 @@ def init_git(workspace: Path, ticket_id: str) -> str:
         ["git", "checkout", "--quiet", "-b", branch],
     ):
         run(args, cwd=workspace)
+    # A local ignore rule rather than a .gitignore file, so it never shows up as part of the change.
+    with open(workspace / ".git" / "info" / "exclude", "a") as exclude:
+        exclude.write("/target/\n")
     return branch
