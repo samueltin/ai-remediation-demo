@@ -1,0 +1,2 @@
+# Keep this list short. The orchestrator prefers the Python standard library.
+pytest>=8,<9

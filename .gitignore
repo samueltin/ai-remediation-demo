@@ -1,0 +1,14 @@
+# Output of each remediation run (reports, summaries, transcripts)
+runs/
+
+# Java / Maven
+target/
+
+# Python
+__pycache__/
+.venv/
+*.pyc
+
+# OS and IDE
+.DS_Store
+.idea/

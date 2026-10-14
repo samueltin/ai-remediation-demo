@@ -1,0 +1,27 @@
+{
+  // Java: import the Maven project in trade-intake/ only.
+  // The Java extension scans the workspace for pom.xml files. The exclusions
+  // keep it away from the orchestrator and run output. The first four entries
+  // are the extension defaults, which must be repeated when overriding.
+  "java.import.maven.enabled": true,
+  "java.import.gradle.enabled": false,
+  "java.import.exclusions": [
+    "**/node_modules/**",
+    "**/.metadata/**",
+    "**/archetype-resources/**",
+    "**/META-INF/maven/**",
+    "**/orchestrator/**",
+    "**/runs/**"
+  ],
+  "java.configuration.updateBuildConfiguration": "automatic",
+
+  // Python: use the orchestrator's own virtual environment.
+  "python.defaultInterpreterPath": "${workspaceFolder}/orchestrator/.venv/bin/python",
+  "python.terminal.activateEnvironment": true,
+
+  // Pytest: run from orchestrator/ so tests can import the orchestrator modules.
+  "python.testing.pytestEnabled": true,
+  "python.testing.unittestEnabled": false,
+  "python.testing.cwd": "${workspaceFolder}/orchestrator",
+  "python.testing.pytestArgs": ["tests"]
+}
