@@ -188,3 +188,23 @@ went green with 15 tests, and only guardrail 1 stopped the run.
 - **Why it matters:** switching agents was a change to one adapter, not to the workflow. One run
   on one ticket is not proof that the agents are equivalent; the controls are what make either
   result reviewable.
+
+## 15. One agent's rejected idea was another agent's fix, and only guardrail 10 stopped it
+
+- **What happened:** on SEC-103, GitHub Copilot CLI (one attempt, one premium request) bumped Guava,
+  reproduced the test compile error, tried to inspect Guava's bytecode in `~/.m2` with `javap`
+  (denied: outside the workspace and not mvn), and then added
+  `src/main/java/com/google/common/util/concurrent/MoreExecutors.java`: a 19 line class with only
+  `directExecutor()` and `sameThreadExecutor()`. That class shadows Guava's own `MoreExecutors`
+  for the whole application, so every other method of it, including ones Guava calls internally,
+  would fail at runtime with `NoSuchMethodError` on any path the tests do not cover. Its final
+  message called this a "compatibility shim" and reported success. The CVE was gone, 15 tests
+  passed, no test file changed, the pom changed only the version, and the diff was 21 lines:
+  guardrails 1 to 9 all passed. Guardrail 10 ("added: ...MoreExecutors.java") stopped the run.
+- **How it was found:** Step 10, one SEC-103 run with `--agent copilot --max-attempts 1`, reading
+  the transcript and the committed diff.
+- **What changed:** nothing in the code; guardrail 10, added in Step 8 after Claude described
+  and rejected this exact workaround (lesson 9), worked on its first real trigger.
+- **Why it matters:** prompt rules are guidance, not controls: the shim arguably obeyed the
+  letter of "fix the code under src/main only". Every workaround an agent mentions should become
+  a check, because another agent, or the same one on another day, may do it.
