@@ -3,9 +3,11 @@ from pathlib import Path
 import pytest
 
 from commands import run
-from guardrails import (attempt_limit, check_all, diff_size, never_merged, no_test_changes, only_existing_project_files,
-                        pom_only_ticket_version, same_test_count_as_baseline, traceability, transcripts_saved)
+from guardrails import (attempt_limit, check_all, diff_size, never_merged, no_test_changes,
+                        only_existing_project_files, pom_only_ticket_version, same_test_count_as_baseline,
+                        scan_clean, traceability, transcripts_saved)
 from maven import BuildResult, SurefireCounts
+from scanner import Finding, compare
 from ticket import load_ticket
 from workspace import commit_change, create_workspace, init_git
 
@@ -184,9 +186,10 @@ def test_check_all_reads_the_evidence_from_git(tmp_path):
 
     checks = check_all(TICKET, workspace, baseline_sha, BASELINE,
                        BuildResult(True, BASELINE, (), 1.0), attempt_count=1, max_attempts=3,
-                       transcripts=[transcript], diff_limit=50)
+                       transcripts=[transcript], diff_limit=50,
+                       comparison=compare({YAML_OLD}, set(), TICKET.cve_id, TICKET.library))
 
-    assert {c.number: c.passed for c in checks} == {1: False, 2: True, 3: True, 4: True, 6: True, 7: True,
+    assert {c.number: c.passed for c in checks} == {1: False, 2: True, 3: True, 4: True, 5: True, 6: True, 7: True,
                                                      8: True, 9: True, 10: True}
     assert "src/test/java/com/example/tradeintake/AuditTest.java" in checks[0].reason
 
@@ -223,3 +226,37 @@ def test_added_deleted_or_foreign_files_are_rejected(name_status, expected):
 
     assert not check.passed
     assert expected in check.reason
+
+
+# Guardrail 5
+
+YAML_OLD = Finding("CVE-2022-1471", "org.yaml:snakeyaml", "1.33")
+TOMCAT = Finding("CVE-2026-65182", "org.apache.tomcat.embed:tomcat-embed-core", "10.1.55")
+
+
+def test_ticket_finding_gone_and_nothing_new_passes():
+    comparison = compare({YAML_OLD, TOMCAT}, {TOMCAT}, TICKET.cve_id, TICKET.library)
+
+    check = scan_clean(TICKET, comparison)
+
+    assert check.number == 5
+    assert check.passed
+    assert "no new findings" in check.reason
+
+
+def test_ticket_finding_still_present_fails():
+    still = Finding("CVE-2022-1471", "org.yaml:snakeyaml", "1.34")
+
+    check = scan_clean(TICKET, compare({YAML_OLD, TOMCAT}, {still, TOMCAT}, TICKET.cve_id, TICKET.library))
+
+    assert not check.passed
+    assert "still reports CVE-2022-1471" in check.reason
+
+
+def test_new_finding_fails_even_when_the_ticket_finding_is_gone():
+    new = Finding("CVE-2099-0001", "org.yaml:snakeyaml", "2.4")
+
+    check = scan_clean(TICKET, compare({YAML_OLD, TOMCAT}, {TOMCAT, new}, TICKET.cve_id, TICKET.library))
+
+    assert not check.passed
+    assert "CVE-2099-0001 in org.yaml:snakeyaml 2.4" in check.reason

@@ -131,3 +131,27 @@ Format: what happened, how it was found, what changed, and why it matters for a 
 
 The simulated agent (`--agent unsafe-sim`) was then used to show guardrail 1 firing: the build
 went green with 15 tests, and only guardrail 1 stopped the run.
+
+## 11. The demo story "compile failure, then fix" is not guaranteed
+
+- **What happened:** in the Step 8 SEC-102 run the agent knew that SnakeYAML 2.x needs
+  `LoaderOptions` and fixed `ReferenceDataConfig` before its first test run, so it never saw a
+  compile failure. Its first command, which chained the version bump, a search and `mvn test`,
+  was denied by the permission mode. It said all this openly in its final message ("I never saw
+  the compile failure myself"). The result was correct, and every guardrail passed.
+- **How it was found:** Step 8, reading the agent's summary in `MR_SUMMARY.md`.
+- **What changed:** nothing in the workflow. For the recorded demo, the compile failure has to be
+  shown from evidence that does not depend on the agent, for example by building the version
+  bump alone, and the narration should say the agent may or may not hit it.
+- **Why it matters:** a demo or audit narrative must rest on what the workflow guarantees, not on
+  one lucky path the agent happened to take.
+
+## 12. A real fix with a clean scan and green tests is still stopped if it changes a test
+
+- **What happened:** the simulated agent (`--agent unsafe-sim`) on SEC-103 upgraded Guava and edited
+  the failing test. The fix was real: the after scan resolved all three Guava findings, no new
+  findings appeared, and all 15 tests passed. Guardrail 1 alone stopped it.
+- **How it was found:** Step 8, the first SEC-103 run with the after scan and the summary.
+- **What changed:** nothing; this is the behaviour we want, and the summary shows it in one table.
+- **Why it matters:** "it works" is not the approval criterion; a change to the tests that judge
+  the change needs a human, however reasonable it looks.

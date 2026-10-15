@@ -1,8 +1,7 @@
 """Guardrails: automated checks on what the agent actually changed, run before any handover.
 
-Each check is a plain function over evidence (file lists, pom.xml text, test counts), so it can
-be tested without git or Maven. check_all gathers that evidence from the workspace's git history.
-Guardrail 5 (scan before and after) is checked separately, after the after scan.
+Each check is a plain function over evidence (file lists, pom.xml text, test counts, scans), so
+it can be tested without git or Maven. check_all gathers that evidence from the workspace.
 """
 
 import xml.etree.ElementTree as ElementTree
@@ -11,6 +10,7 @@ from pathlib import Path
 
 from commands import run
 from maven import BuildResult, SurefireCounts, describe
+from scanner import ScanComparison
 from ticket import Ticket
 
 POM_NAMESPACE = "{http://maven.apache.org/POM/4.0.0}"
@@ -81,6 +81,20 @@ def diff_size(numstat: str, limit: int) -> Check:
     return Check(4, name, total <= limit, f"{total} changed lines (limit {limit})")
 
 
+def scan_clean(ticket: Ticket, comparison: ScanComparison) -> Check:
+    name = "Scan after: ticket finding gone, no new findings"
+    problems = []
+    if not comparison.ticket_finding_gone:
+        problems.append(f"the scan still reports {ticket.cve_id} in {ticket.library}")
+    if comparison.new_findings:
+        new = ", ".join(f"{f.cve_id} in {f.package} {f.installed_version}" for f in sorted(comparison.new_findings))
+        problems.append(f"new findings: {new}")
+    if problems:
+        return Check(5, name, False, "; ".join(problems))
+    return Check(5, name, True, f"{ticket.cve_id} gone, no new findings, "
+                                f"{len(comparison.resolved)} finding(s) resolved")
+
+
 def traceability(ticket_id: str, branch: str, head_subject: str) -> Check:
     name = "Ticket ID in branch name and commit message"
     if branch != f"fix/{ticket_id}":
@@ -140,7 +154,7 @@ def only_existing_project_files(name_status: str) -> Check:
 
 def check_all(ticket: Ticket, workspace: Path, baseline_sha: str, baseline: SurefireCounts,
               final_build: BuildResult, attempt_count: int, max_attempts: int,
-              transcripts: list[Path], diff_limit: int) -> list[Check]:
+              transcripts: list[Path], diff_limit: int, comparison: ScanComparison) -> list[Check]:
     def git(*args: str) -> str:
         return run(["git", *args], cwd=workspace)
 
@@ -150,6 +164,7 @@ def check_all(ticket: Ticket, workspace: Path, baseline_sha: str, baseline: Sure
         pom_only_ticket_version(ticket, git("show", "main:pom.xml"), git("show", "HEAD:pom.xml")),
         attempt_limit(attempt_count, final_build.passed, max_attempts),
         diff_size(git("diff", "--numstat", "--no-renames", "main", "HEAD"), diff_limit),
+        scan_clean(ticket, comparison),
         traceability(ticket.ticket_id, git("rev-parse", "--abbrev-ref", "HEAD").strip(),
                      git("log", "-1", "--format=%s").strip()),
         transcripts_saved(transcripts),

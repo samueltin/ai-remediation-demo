@@ -18,7 +18,8 @@ from agents import AGENTS, AgentError, AgentResult, build_prompt
 from commands import CommandError, run
 from guardrails import DEFAULT_DIFF_LIMIT, check_all
 from maven import BuildEnvironmentError, BuildResult, check_java_version, describe, run_tests
-from scanner import ScanReportError, findings_for, scan
+from scanner import ScanReportError, compare, findings_for, scan
+from summary import render_summary
 from ticket import Ticket, TicketError, load_ticket
 from workspace import (WORKSPACES_ROOT, WorkspaceError, commit_change, create_workspace, has_changes, init_git,
                        snapshot)
@@ -26,7 +27,7 @@ from workspace import (WORKSPACES_ROOT, WorkspaceError, commit_change, create_wo
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUNS_DIR = REPO_ROOT / "runs"
 MAX_ATTEMPTS = 3
-TOTAL_STEPS = 10
+TOTAL_STEPS = 12
 _step_numbers = itertools.count(1)
 
 
@@ -156,10 +157,17 @@ def run_workflow(ticket: Ticket, agent: str, diff_limit: int, run_id: str,
     for line in run(["git", "show", "--stat", "--format=%h %s", "HEAD"], cwd=workspace).splitlines():
         detail(line)
 
+    step("Scanning dependencies after the change")
+    findings_after = scan(workspace, run_dir / "scan_after.json")
+    comparison = compare(findings, findings_after, ticket.cve_id, ticket.library)
+    detail(f"{len(findings_after)} findings (before: {len(findings)}), "
+           f"{ticket.cve_id} {'gone' if comparison.ticket_finding_gone else 'STILL PRESENT'}, "
+           f"{len(comparison.new_findings)} new, {len(comparison.resolved)} resolved")
+
     step("Checking guardrails")
     transcripts = [run_dir / f"{agent}_attempt_{a.number}.jsonl" for a in attempts]
     checks = check_all(ticket, workspace, baseline_sha, baseline.counts, last.build, len(attempts),
-                       MAX_ATTEMPTS, transcripts, diff_limit)
+                       MAX_ATTEMPTS, transcripts, diff_limit, comparison)
     (run_dir / "guardrails.json").write_text(json.dumps([asdict(c) for c in checks], indent=2))
     for check in checks:
         detail(f"{'PASS' if check.passed else 'FAIL'}  {check.number}. {check.name}: {check.reason}")
@@ -167,12 +175,24 @@ def run_workflow(ticket: Ticket, agent: str, diff_limit: int, run_id: str,
     if declined_reason(attempts):
         problems.insert(0, declined_reason(attempts))
     if problems:
-        return RunOutcome.NEEDS_HUMAN_ATTENTION, "; ".join(problems)
+        outcome, reason = RunOutcome.NEEDS_HUMAN_ATTENTION, "; ".join(problems)
+    else:
+        outcome, reason = (RunOutcome.READY_FOR_REVIEW,
+                           f"all guardrails pass after {len(attempts)} attempt(s)")
 
-    # Step 8 of the build replaces this ending with the after scan (guardrail 5) and the summary.
-    return (RunOutcome.NEEDS_HUMAN_ATTENTION,
-            f"all guardrails pass after {len(attempts)} attempt(s), "
-            "but the after scan and the summary are not built yet.")
+    step("Writing the merge request summary")
+    def git(*args: str) -> str:
+        return run(["git", *args], cwd=workspace)
+    summary = render_summary(
+        ticket=ticket, outcome=outcome.name, reason=reason, agent=agent, attempts=attempts,
+        baseline=baseline, checks=checks, comparison=comparison,
+        findings_before=len(findings), findings_after=len(findings_after),
+        diffstat=git("diff", "--stat", "main", "HEAD"), diff=git("diff", "main", "HEAD"),
+        workspace=workspace, branch=branch, commit=git("rev-parse", "--short", "HEAD").strip(),
+        transcripts=[path.name for path in transcripts])
+    (run_dir / "MR_SUMMARY.md").write_text(summary)
+    detail(f"written to {(run_dir / 'MR_SUMMARY.md').relative_to(REPO_ROOT)}")
+    return outcome, reason
 
 
 def finish(outcome: RunOutcome, reason: str, run_dir: Path | None) -> int:
@@ -181,6 +201,8 @@ def finish(outcome: RunOutcome, reason: str, run_dir: Path | None) -> int:
     if run_dir is not None:
         (run_dir / "outcome.txt").write_text(line + "\n")
         print(f"Run folder: {run_dir.relative_to(REPO_ROOT)}")
+        if (run_dir / "MR_SUMMARY.md").is_file():
+            print(f"Merge request summary: {(run_dir / 'MR_SUMMARY.md').relative_to(REPO_ROOT)}")
     return outcome.value
 
 
