@@ -61,8 +61,9 @@ def detail(message: str) -> None:
 def run_attempts(ticket: Ticket, agent_name: str,
                  run_agent: Callable[[Path, str, Path], AgentResult],
                  test_build: Callable[[Path, Path], BuildResult],
-                 workspace: Path, run_dir: Path, bump_errors: tuple[str, ...] = ()) -> list[Attempt]:
-    """Runs the agent, then the tests, up to MAX_ATTEMPTS times (guardrail 3).
+                 workspace: Path, run_dir: Path, bump_errors: tuple[str, ...] = (),
+                 max_attempts: int = MAX_ATTEMPTS) -> list[Attempt]:
+    """Runs the agent, then the tests, up to max_attempts times (guardrail 3, at most MAX_ATTEMPTS).
 
     Stops at the first green build, or when an attempt adds no new change: an agent that
     declined once will only decline again, so another attempt would cost money for nothing.
@@ -70,7 +71,7 @@ def run_attempts(ticket: Ticket, agent_name: str,
     """
     attempts: list[Attempt] = []
     previous_errors: tuple[str, ...] = ()
-    for number in range(1, MAX_ATTEMPTS + 1):
+    for number in range(1, max_attempts + 1):
         prompt = build_prompt(ticket, previous_errors, bump_errors if number == 1 else ())
         (run_dir / f"prompt_attempt_{number}.txt").write_text(prompt)
         detail(f"attempt {number}: running {agent_name}")
@@ -119,8 +120,8 @@ def try_version_bump(ticket: Ticket, workspace: Path, run_dir: Path) -> BuildRes
     return result
 
 
-def run_workflow(ticket: Ticket, agent: str, always_agent: bool, diff_limit: int, run_id: str,
-                 run_dir: Path) -> tuple[RunOutcome, str]:
+def run_workflow(ticket: Ticket, agent: str, always_agent: bool, max_attempts: int, diff_limit: int,
+                 run_id: str, run_dir: Path) -> tuple[RunOutcome, str]:
     step("Checking that Maven runs on JDK 17")
     detail(f"Java {check_java_version(REPO_ROOT)}")
 
@@ -174,8 +175,9 @@ def run_workflow(ticket: Ticket, agent: str, always_agent: bool, diff_limit: int
             reset_workspace(workspace)
             detail("workspace reset to the baseline before calling the agent")
         bump_errors = version_bump.error_lines if version_bump is not None and not version_bump.passed else ()
-        step(f"Running the agent and the tests (at most {MAX_ATTEMPTS} attempts)")
-        attempts = run_attempts(ticket, agent, AGENTS[agent], run_tests, workspace, run_dir, bump_errors)
+        step(f"Running the agent and the tests (at most {max_attempts} attempts)")
+        attempts = run_attempts(ticket, agent, AGENTS[agent], run_tests, workspace, run_dir, bump_errors,
+                                max_attempts)
         last = attempts[-1]
         detail("agent's final message:")
         for line in last.final_message.strip().splitlines():
@@ -201,7 +203,7 @@ def run_workflow(ticket: Ticket, agent: str, always_agent: bool, diff_limit: int
     step("Checking guardrails")
     transcripts = [run_dir / f"{agent}_attempt_{a.number}.jsonl" for a in attempts]
     checks = check_all(ticket, workspace, baseline_sha, baseline.counts, final_build, len(attempts),
-                       MAX_ATTEMPTS, transcripts, diff_limit, comparison)
+                       max_attempts, transcripts, diff_limit, comparison)
     (run_dir / "guardrails.json").write_text(json.dumps([asdict(c) for c in checks], indent=2))
     for check in checks:
         detail(f"{'PASS' if check.passed else 'FAIL'}  {check.number}. {check.name}: {check.reason}")
@@ -251,6 +253,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="coding agent CLI to use (unsafe-sim is a simulated misbehaving agent)")
     parser.add_argument("--always-agent", action="store_true",
                         help="call the agent even when the plain version bump already passes")
+    parser.add_argument("--max-attempts", type=int, choices=range(1, MAX_ATTEMPTS + 1), default=MAX_ATTEMPTS,
+                        help=f"agent attempts allowed (guardrail 3); can only lower the limit of {MAX_ATTEMPTS}")
     parser.add_argument("--max-diff-lines", type=int, default=DEFAULT_DIFF_LIMIT,
                         help=f"guardrail 4 limit on changed lines (default {DEFAULT_DIFF_LIMIT})")
     args = parser.parse_args(argv)
@@ -265,7 +269,7 @@ def main(argv: list[str] | None = None) -> int:
         run_id = f"{ticket.ticket_id}-{datetime.now():%Y%m%d-%H%M%S}"
         run_dir = RUNS_DIR / run_id
         run_dir.mkdir(parents=True)
-        outcome, reason = run_workflow(ticket, args.agent, args.always_agent, args.max_diff_lines,
+        outcome, reason = run_workflow(ticket, args.agent, args.always_agent, args.max_attempts, args.max_diff_lines,
                                        run_id, run_dir)
     except (TicketError, WorkspaceError, CommandError, ScanReportError, AgentError,
             BuildEnvironmentError) as error:

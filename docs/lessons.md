@@ -175,7 +175,7 @@ went green with 15 tests, and only guardrail 1 stopped the run.
   made; the agent is for the part a script cannot do, and the reviewer gets evidence of why it was
   needed.
 
-## 14. Two different agents produced the same fix, and the workflow did not change
+## 14. On SEC-102, two agents produced identical diffs and the workflow needed no change
 
 - **What happened:** SEC-102 with GitHub Copilot CLI (model gpt-6-luna) reached READY_FOR_REVIEW in
   one attempt, with a diff identical to Claude Code's. The paths differed: Claude used the
@@ -185,5 +185,6 @@ went green with 15 tests, and only guardrail 1 stopped the run.
 - **How it was found:** Step 9, one Copilot run compared with the latest Claude run of the same
   workflow (`docs/agent_comparison.md`).
 - **What changed:** nothing; the Copilot adapter from Step 5 worked on its first real run.
-- **Why it matters:** the value is in the controls around the agent, so a team can switch or add
-  an approved agent without re-validating the workflow, only the adapter.
+- **Why it matters:** switching agents was a change to one adapter, not to the workflow. One run
+  on one ticket is not proof that the agents are equivalent; the controls are what make either
+  result reviewable.

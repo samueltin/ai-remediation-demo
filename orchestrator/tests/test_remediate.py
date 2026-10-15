@@ -134,3 +134,15 @@ def test_bump_errors_go_into_the_first_prompt_only(tmp_path):
 
 def test_no_declined_reason_without_attempts():
     assert declined_reason([]) is None
+
+
+def test_a_lower_attempt_limit_is_respected(tmp_path):
+    # Used to cap paid agent calls, for example one premium request on a free plan.
+    workspace, run_dir = setup(tmp_path)
+    agent = FakeAgent()
+
+    attempts = run_attempts(TICKET, "fake", agent, builds(*[red("broken")] * 3), workspace, run_dir,
+                            max_attempts=1)
+
+    assert len(attempts) == 1
+    assert len(agent.prompts) == 1

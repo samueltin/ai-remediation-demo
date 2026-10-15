@@ -24,12 +24,12 @@ Runs: `runs/SEC-102-20261015-133525` (Claude) and `runs/SEC-102-20261015-133811`
 
 ## What this shows
 
-- **The agent is replaceable.** Switching agents needed no change to the workflow: one adapter
-  function per CLI (`agents.py`), and everything around it (workspace, deterministic bump,
-  tests, scans, guardrails, summary) is shared. The Copilot adapter worked on its first real run.
-- **The controls judge the result, not the agent.** Two different models took different paths
-  and produced the same diff; the same evidence (workflow test run, scan comparison, ten
-  guardrails) supports both summaries.
+- **On SEC-102, both agents produced identical diffs and the workflow needed no change.**
+  Switching agents meant one adapter function per CLI (`agents.py`); everything around it
+  (workspace, deterministic bump, tests, scans, guardrails, summary) is shared. One run is not
+  proof that the agents are equivalent.
+- **The controls judge the result, not the agent.** The two models took different paths; the same
+  evidence (workflow test run, scan comparison, ten guardrails) supports both summaries.
 - **Both CLIs could be held to the same boundary**: edit files in the workspace and run `mvn`,
   with everything else denied in non-interactive mode. The flags differ (`--permission-mode
   dontAsk` and `Bash(mvn *)` for Claude, `--allow-tool shell(mvn:*)` without `--allow-all-tools`
