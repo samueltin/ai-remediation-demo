@@ -86,8 +86,8 @@ Format: what happened, how it was found, what changed, and why it matters for a 
   pom change from attempt 1 still counted as a change.
 - **How it was found:** Step 7, the first real SEC-103 run, reading `attempts.json` and the three
   transcripts (attempt 2: 2 turns, attempt 3: 3 turns, no edits in either).
-- **What changed:** recorded here; a per-attempt change check is proposed so the loop stops when an
-  attempt adds nothing new.
+- **What changed:** the loop now stops when an attempt adds no new change, with the reason
+  "agent declined, no new change in attempt N". A test with a fake agent proves it.
 - **Why it matters:** a retry policy should spend money only when the last attempt made progress;
   an honest refusal is a result to hand to a human, not a failure to retry.
 
@@ -101,3 +101,33 @@ Format: what happened, how it was found, what changed, and why it matters for a 
   showed.
 - **Why it matters:** file changes go through the edit tool, so every change appears in the
   transcript as a reviewable edit, not hidden inside a shell command.
+
+## 9. The agent's own reasoning revealed a bypass that four guardrails would have missed
+
+- **What happened:** in SEC-103 attempt 3 the agent wrote that it could copy Guava's
+  `com.google.common.util.concurrent.MoreExecutors` into `src/main` with the old method added back,
+  and rejected the idea as a forbidden workaround. Had it done so, guardrails 1 (no test change),
+  2 (pom only the version), 4 (diff size) and 9 (same test count) would all have passed: the
+  project's copy of the class would override the library's.
+- **How it was found:** reading the final message of the SEC-103 transcripts in Step 7.
+- **What changed:** guardrail 10: the agent may only modify existing files, and every changed
+  `.java` file must be in `com.example.tradeintake`. The first test written was a shadow
+  `MoreExecutors.java` added under `src/main`, which must fail.
+- **Why it matters:** the agent's explanations are a free threat model; read them, and turn every
+  workaround it mentions into a check that does not depend on it choosing not to.
+
+## 10. The same agent and prompt behaved differently from one run to the next
+
+- **What happened:** in the first SEC-103 run Claude left Guava upgraded in pom.xml and stopped.
+  In the next run, with the same prompt, it upgraded Guava, saw the same compile error, put the
+  version back to 20.0 and stopped, leaving the workspace unchanged. Both runs ended correctly
+  as NEEDS_HUMAN_ATTENTION, through different paths (guardrails 3 and 9 the first time,
+  "agent declined, no new change in attempt 1" the second time).
+- **How it was found:** Step 7, comparing the two SEC-103 transcripts.
+- **What changed:** nothing in the code; both paths were already handled. The demo script should
+  not promise one exact path for SEC-103, only the outcome.
+- **Why it matters:** agent output is not deterministic, so controls must judge the result in
+  the workspace, never assume the agent will repeat what it did in testing.
+
+The simulated agent (`--agent unsafe-sim`) was then used to show guardrail 1 firing: the build
+went green with 15 tests, and only guardrail 1 stopped the run.

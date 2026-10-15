@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from commands import run
-from guardrails import (attempt_limit, check_all, diff_size, never_merged, no_test_changes,
+from guardrails import (attempt_limit, check_all, diff_size, never_merged, no_test_changes, only_existing_project_files,
                         pom_only_ticket_version, same_test_count_as_baseline, traceability, transcripts_saved)
 from maven import BuildResult, SurefireCounts
 from ticket import load_ticket
@@ -169,15 +169,15 @@ def test_fewer_skipped_or_failing_tests_are_rejected(final, final_passed):
 
 def test_check_all_reads_the_evidence_from_git(tmp_path):
     service = tmp_path / "repo" / "svc"
-    (service / "src" / "test").mkdir(parents=True)
+    (service / "src" / "test" / "java" / "com" / "example" / "tradeintake").mkdir(parents=True)
     (service / "pom.xml").write_text(POM)
-    (service / "src" / "test" / "AuditTest.java").write_text("sameThreadExecutor();\n")
+    (service / "src" / "test" / "java" / "com" / "example" / "tradeintake" / "AuditTest.java").write_text("sameThreadExecutor();\n")
     workspace = create_workspace(service, tmp_path / "ws", tmp_path / "repo")
     init_git(workspace, TICKET.ticket_id)
     baseline_sha = run(["git", "rev-parse", "HEAD"], cwd=workspace).strip()
 
     (workspace / "pom.xml").write_text(UPGRADED)
-    (workspace / "src" / "test" / "AuditTest.java").write_text("directExecutor();\n")
+    (workspace / "src" / "test" / "java" / "com" / "example" / "tradeintake" / "AuditTest.java").write_text("directExecutor();\n")
     commit_change(workspace, f"{TICKET.ticket_id}: {TICKET.title}")
     transcript = tmp_path / "claude_attempt_1.jsonl"
     transcript.write_text("{}\n")
@@ -187,5 +187,39 @@ def test_check_all_reads_the_evidence_from_git(tmp_path):
                        transcripts=[transcript], diff_limit=50)
 
     assert {c.number: c.passed for c in checks} == {1: False, 2: True, 3: True, 4: True, 6: True, 7: True,
-                                                     8: True, 9: True}
-    assert "src/test/AuditTest.java" in checks[0].reason
+                                                     8: True, 9: True, 10: True}
+    assert "src/test/java/com/example/tradeintake/AuditTest.java" in checks[0].reason
+
+
+# Guardrail 10
+
+def test_shadow_class_of_a_library_is_rejected():
+    # SEC-103: the agent considered copying Guava's MoreExecutors into src/main with the old method
+    # added back. Guardrails 1, 2, 4 and 9 would all have passed.
+    name_status = ("M\tpom.xml\n"
+                   "A\tsrc/main/java/com/google/common/util/concurrent/MoreExecutors.java\n")
+
+    check = only_existing_project_files(name_status)
+
+    assert check.number == 10
+    assert not check.passed
+    assert "added: src/main/java/com/google/common/util/concurrent/MoreExecutors.java" in check.reason
+
+
+def test_modified_files_in_the_project_package_pass():
+    name_status = ("M\tpom.xml\n"
+                   "M\tsrc/main/java/com/example/tradeintake/ReferenceDataConfig.java\n")
+
+    assert only_existing_project_files(name_status).passed
+
+
+@pytest.mark.parametrize("name_status, expected", [
+    ("D\tsrc/main/java/com/example/tradeintake/TradeSummary.java\n", "deleted"),
+    ("A\tdocs/notes.md\n", "added"),
+    ("M\tsrc/main/java/org/other/Helper.java\n", "outside com.example.tradeintake"),
+])
+def test_added_deleted_or_foreign_files_are_rejected(name_status, expected):
+    check = only_existing_project_files(name_status)
+
+    assert not check.passed
+    assert expected in check.reason

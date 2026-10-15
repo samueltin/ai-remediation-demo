@@ -3,7 +3,7 @@ from pathlib import Path
 
 from agents import AgentResult
 from maven import BuildResult, SurefireCounts
-from remediate import MAX_ATTEMPTS, run_attempts
+from remediate import MAX_ATTEMPTS, declined_reason, run_attempts
 from ticket import load_ticket
 from workspace import create_workspace, init_git
 
@@ -22,13 +22,15 @@ def builds(*results):
 
 
 class FakeAgent:
-    def __init__(self, edits=True):
-        self.edits = edits
+    """Edits pom.xml in the attempts listed in edit_attempts (all attempts by default)."""
+
+    def __init__(self, edits=True, edit_attempts=None):
+        self.edit_attempts = edit_attempts if edit_attempts is not None else (range(1, 10) if edits else ())
         self.prompts = []
 
     def __call__(self, workspace, prompt, transcript):
         self.prompts.append(prompt)
-        if self.edits:
+        if len(self.prompts) in self.edit_attempts:
             (workspace / "pom.xml").write_text(f"<project>attempt {len(self.prompts)}</project>")
         return AgentResult(final_message=f"attempt {len(self.prompts)} done", model="fake-model")
 
@@ -95,3 +97,24 @@ def test_each_attempt_is_recorded_in_the_run_folder(tmp_path):
         (1, False, "fake-model"), (2, True, "fake-model")]
     assert all("agent_seconds" in r for r in records)
     assert (run_dir / "prompt_attempt_2.txt").is_file()
+
+
+def test_stops_when_an_attempt_adds_no_new_change(tmp_path):
+    # SEC-103: attempt 1 changed the pom, then the agent refused; attempt 3 would only repeat the refusal.
+    workspace, run_dir = setup(tmp_path)
+    agent = FakeAgent(edit_attempts={1})
+
+    attempts = run_attempts(TICKET, "fake", agent, builds(*[red("test does not compile")] * 3),
+                            workspace, run_dir)
+
+    assert len(agent.prompts) == 2
+    assert [(a.changed, a.new_change) for a in attempts] == [(True, True), (True, False)]
+    assert declined_reason(attempts) == "agent declined, no new change in attempt 2"
+
+
+def test_no_declined_reason_when_the_last_attempt_made_progress(tmp_path):
+    workspace, run_dir = setup(tmp_path)
+
+    attempts = run_attempts(TICKET, "fake", FakeAgent(), builds(red("broken"), GREEN), workspace, run_dir)
+
+    assert declined_reason(attempts) is None

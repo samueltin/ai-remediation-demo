@@ -20,7 +20,8 @@ from guardrails import DEFAULT_DIFF_LIMIT, check_all
 from maven import BuildEnvironmentError, BuildResult, check_java_version, describe, run_tests
 from scanner import ScanReportError, findings_for, scan
 from ticket import Ticket, TicketError, load_ticket
-from workspace import WORKSPACES_ROOT, WorkspaceError, commit_change, create_workspace, has_changes, init_git
+from workspace import (WORKSPACES_ROOT, WorkspaceError, commit_change, create_workspace, has_changes, init_git,
+                       snapshot)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUNS_DIR = REPO_ROOT / "runs"
@@ -41,7 +42,8 @@ class Attempt:
     number: int
     model: str
     final_message: str
-    changed: bool
+    changed: bool        # the workspace differs from the baseline
+    new_change: bool     # this attempt changed something compared with the previous one
     agent_seconds: float
     build: BuildResult
 
@@ -60,7 +62,8 @@ def run_attempts(ticket: Ticket, agent_name: str,
                  workspace: Path, run_dir: Path) -> list[Attempt]:
     """Runs the agent, then the tests, up to MAX_ATTEMPTS times (guardrail 3).
 
-    Stops at the first green build, or when the agent leaves the workspace unchanged.
+    Stops at the first green build, or when an attempt adds no new change: an agent that
+    declined once will only decline again, so another attempt would cost money for nothing.
     A retry gets the previous build errors, and continues from the current workspace.
     """
     attempts: list[Attempt] = []
@@ -69,20 +72,30 @@ def run_attempts(ticket: Ticket, agent_name: str,
         prompt = build_prompt(ticket, previous_errors)
         (run_dir / f"prompt_attempt_{number}.txt").write_text(prompt)
         detail(f"attempt {number}: running {agent_name}")
+        before = snapshot(workspace)
         started = time.monotonic()
         result = run_agent(workspace, prompt, run_dir / f"{agent_name}_attempt_{number}.jsonl")
         agent_seconds = round(time.monotonic() - started, 1)
+        new_change = snapshot(workspace) != before
         changed = has_changes(workspace)
         build = test_build(workspace, run_dir / f"mvn_test_attempt_{number}.log")
 
-        attempts.append(Attempt(number, result.model, result.final_message, changed, agent_seconds, build))
+        attempts.append(Attempt(number, result.model, result.final_message, changed, new_change,
+                                agent_seconds, build))
         (run_dir / "attempts.json").write_text(json.dumps([asdict(a) for a in attempts], indent=2))
-        detail(f"attempt {number}: agent {agent_seconds}s, workspace changed: {'yes' if changed else 'no'}, "
+        detail(f"attempt {number}: agent {agent_seconds}s, new change: {'yes' if new_change else 'no'}, "
                f"mvn test {'PASS' if build.passed else 'FAIL'} ({describe(build.counts)})")
-        if build.passed or not changed:
+        if build.passed or not new_change:
             break
         previous_errors = build.error_lines
     return attempts
+
+
+def declined_reason(attempts: list[Attempt]) -> str | None:
+    last = attempts[-1]
+    if not last.new_change:
+        return f"agent declined, no new change in attempt {last.number}"
+    return None
 
 
 def run_workflow(ticket: Ticket, agent: str, diff_limit: int, run_id: str,
@@ -135,7 +148,7 @@ def run_workflow(ticket: Ticket, agent: str, diff_limit: int, run_id: str,
         detail(f"  | {line}")
     if not last.changed:
         return (RunOutcome.NEEDS_HUMAN_ATTENTION,
-                "the agent made no changes. See its final message above and the transcript.")
+                f"{declined_reason(attempts)}; the workspace is unchanged. See the agent's final message.")
 
     # Committed even when red, so the reviewer sees exactly the state the guardrails checked.
     step("Committing the agent's change on the fix branch")
@@ -150,10 +163,11 @@ def run_workflow(ticket: Ticket, agent: str, diff_limit: int, run_id: str,
     (run_dir / "guardrails.json").write_text(json.dumps([asdict(c) for c in checks], indent=2))
     for check in checks:
         detail(f"{'PASS' if check.passed else 'FAIL'}  {check.number}. {check.name}: {check.reason}")
-    failed = [c for c in checks if not c.passed]
-    if failed:
-        return (RunOutcome.NEEDS_HUMAN_ATTENTION,
-                "; ".join(f"guardrail {c.number} failed: {c.reason}" for c in failed))
+    problems = [f"guardrail {c.number} failed: {c.reason}" for c in checks if not c.passed]
+    if declined_reason(attempts):
+        problems.insert(0, declined_reason(attempts))
+    if problems:
+        return RunOutcome.NEEDS_HUMAN_ATTENTION, "; ".join(problems)
 
     # Step 8 of the build replaces this ending with the after scan (guardrail 5) and the summary.
     return (RunOutcome.NEEDS_HUMAN_ATTENTION,
@@ -173,7 +187,8 @@ def finish(outcome: RunOutcome, reason: str, run_dir: Path | None) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Remediate one security ticket in an isolated workspace.")
     parser.add_argument("ticket", type=Path, help="path to the ticket JSON file")
-    parser.add_argument("--agent", required=True, choices=sorted(AGENTS), help="coding agent CLI to use")
+    parser.add_argument("--agent", required=True, choices=sorted(AGENTS),
+                        help="coding agent CLI to use (unsafe-sim is a simulated misbehaving agent)")
     parser.add_argument("--max-diff-lines", type=int, default=DEFAULT_DIFF_LIMIT,
                         help=f"guardrail 4 limit on changed lines (default {DEFAULT_DIFF_LIMIT})")
     args = parser.parse_args(argv)

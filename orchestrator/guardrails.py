@@ -15,6 +15,8 @@ from ticket import Ticket
 
 POM_NAMESPACE = "{http://maven.apache.org/POM/4.0.0}"
 DEFAULT_DIFF_LIMIT = 50
+# demo-shortcut: the project package is fixed for trade-intake. Production: read it from per service config.
+PROJECT_PACKAGE = "com.example.tradeintake"
 
 
 @dataclass(frozen=True)
@@ -114,6 +116,28 @@ def same_test_count_as_baseline(baseline: SurefireCounts, final: SurefireCounts,
     return Check(9, name, True, f"{final.run} run, same as the baseline, 0 skipped")
 
 
+def only_existing_project_files(name_status: str) -> Check:
+    """Guardrail 10, from `git diff --name-status --no-renames`: renames show as delete plus add.
+
+    Stops shadow classes: a copy of a library class with the same package and name in src/main
+    would override the real one, passing every other guardrail.
+    """
+    name = f"Only existing files changed, Java only in {PROJECT_PACKAGE}"
+    package_path = f"/java/{PROJECT_PACKAGE.replace('.', '/')}/"
+    problems = []
+    for line in name_status.splitlines():
+        status, path = line.split("\t", 1)
+        if status == "A":
+            problems.append(f"added: {path}")
+        elif status == "D":
+            problems.append(f"deleted: {path}")
+        elif path.endswith(".java") and package_path not in path:
+            problems.append(f"outside {PROJECT_PACKAGE}: {path}")
+    if problems:
+        return Check(10, name, False, "; ".join(problems))
+    return Check(10, name, True, "only existing files modified")
+
+
 def check_all(ticket: Ticket, workspace: Path, baseline_sha: str, baseline: SurefireCounts,
               final_build: BuildResult, attempt_count: int, max_attempts: int,
               transcripts: list[Path], diff_limit: int) -> list[Check]:
@@ -131,6 +155,7 @@ def check_all(ticket: Ticket, workspace: Path, baseline_sha: str, baseline: Sure
         transcripts_saved(transcripts),
         never_merged(git("rev-parse", "main").strip(), baseline_sha, git("remote")),
         same_test_count_as_baseline(baseline, final_build.counts, final_build.passed),
+        only_existing_project_files(git("diff", "--name-status", "--no-renames", "main", "HEAD")),
     ]
 
 

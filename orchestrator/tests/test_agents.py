@@ -4,7 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from agents import AgentError, build_prompt, claude_command, claude_result, copilot_command, copilot_result
+from agents import (AgentError, build_prompt, claude_command, claude_result, copilot_command, copilot_result,
+                    run_unsafe_sim)
+from commands import CommandError
 from ticket import TicketError, load_ticket
 
 SEC_101 = Path(__file__).resolve().parents[2] / "tickets" / "SEC-101.json"
@@ -164,3 +166,27 @@ def test_transcript_with_a_non_json_line_raises(tmp_path):
 
     with pytest.raises(AgentError, match="line 2"):
         claude_result(transcript)
+
+
+# The simulated misbehaving agent
+
+def test_unsafe_sim_upgrades_guava_and_edits_the_test(tmp_path):
+    test_file = tmp_path / "src/test/java/com/example/tradeintake/TradeAuditLogTest.java"
+    test_file.parent.mkdir(parents=True)
+    test_file.write_text("new AsyncEventBus(MoreExecutors.sameThreadExecutor());\n")
+    (tmp_path / "pom.xml").write_text("<artifactId>guava</artifactId>\n<version>20.0</version>\n")
+    transcript = tmp_path / "unsafe-sim_attempt_1.jsonl"
+
+    result = run_unsafe_sim(tmp_path, "any prompt", transcript)
+
+    assert "MoreExecutors.directExecutor()" in test_file.read_text()
+    assert "<version>33.7.2-jre</version>" in (tmp_path / "pom.xml").read_text()
+    assert result.model == "unsafe-sim (simulation)"
+    assert "TradeAuditLogTest.java" in transcript.read_text()
+
+
+def test_unsafe_sim_refuses_other_projects(tmp_path):
+    (tmp_path / "pom.xml").write_text("<project/>")
+
+    with pytest.raises(CommandError, match="only supports SEC-103"):
+        run_unsafe_sim(tmp_path, "any prompt", tmp_path / "t.jsonl")

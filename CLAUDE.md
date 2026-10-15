@@ -110,6 +110,13 @@ can mislead the agent's own build (see docs/lessons.md).
 | 7 | Agent transcript saved | No audit trail |
 | 8 | The workflow NEVER merges | Bypassing human approval |
 | 9 | Tests run must equal the baseline count and none may be skipped (read from the Surefire reports by the orchestrator) | Green build because tests were disabled, not because they passed |
+| 10 | Only existing files may be modified (no added, deleted or renamed files), and every changed .java file must be in the package `com.example.tradeintake` | Shadow classes: a copy of a library class in src/main overrides the real one and passes every other guardrail |
+
+Attempt loop: it stops early when an attempt adds no new change ("agent declined, no new change in
+attempt N"), because a declining agent will only decline again.
+
+`--agent unsafe-sim` is a scripted, clearly labelled simulation of a misbehaving agent (it edits the
+SEC-103 test file). It exists only to show guardrail 1 firing on demand.
 
 Scan comparison (guardrail 5):
 - Compare findings before and after as sets of (CVE ID, package, installed version), never by count.

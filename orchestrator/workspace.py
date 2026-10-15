@@ -57,6 +57,12 @@ def init_git(workspace: Path, ticket_id: str) -> str:
     return branch
 
 
+def snapshot(workspace: Path) -> str:
+    """A hash of every file in the working tree except ignored ones, to spot new changes."""
+    run(["git", "add", "--all"], cwd=workspace)
+    return run(["git", "write-tree"], cwd=workspace).strip()
+
+
 def has_changes(workspace: Path) -> bool:
     return bool(run(["git", "status", "--porcelain"], cwd=workspace).strip())
 

@@ -11,6 +11,7 @@ Copilot CLI 1.0.97. Both still allow read-only shell commands such as ls inside 
 
 import json
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from string import Template
@@ -19,6 +20,7 @@ from commands import run
 from ticket import Ticket, TicketError
 
 PROMPT_TEMPLATE = Path(__file__).resolve().parent / "prompt_template.txt"
+UNSAFE_SIM_SCRIPT = Path(__file__).resolve().parent / "unsafe_sim_agent.py"
 SECTION_MARKER = re.compile(r"</?\s*(ticket_data|build_output)\s*>", re.IGNORECASE)
 RETRY_TEMPLATE = Template("""
 A previous attempt left the workspace in its current state. The workflow then ran mvn test
@@ -113,7 +115,13 @@ def run_copilot(workspace: Path, prompt: str, transcript: Path) -> AgentResult:
     return copilot_result(transcript)
 
 
-AGENTS = {"claude": run_claude, "copilot": run_copilot}
+def run_unsafe_sim(workspace: Path, prompt: str, transcript: Path) -> AgentResult:
+    """The simulated misbehaving agent (see unsafe_sim_agent.py). It ignores the prompt."""
+    run([sys.executable, str(UNSAFE_SIM_SCRIPT)], cwd=workspace, timeout=60, stdout_path=transcript)
+    return copilot_result(transcript)
+
+
+AGENTS = {"claude": run_claude, "copilot": run_copilot, "unsafe-sim": run_unsafe_sim}
 
 
 def claude_result(transcript: Path) -> AgentResult:

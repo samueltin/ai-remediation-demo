@@ -2,7 +2,7 @@ import subprocess
 
 import pytest
 
-from workspace import WorkspaceError, commit_change, create_workspace, has_changes, init_git
+from workspace import WorkspaceError, commit_change, create_workspace, has_changes, init_git, snapshot
 
 
 def make_service(tmp_path):
@@ -86,3 +86,15 @@ def test_maven_build_output_is_not_part_of_the_diff(tmp_path):
     (workspace / "target" / "classes" / "App.class").write_text("bytes")
 
     assert git(workspace, "status", "--porcelain") == ""
+
+
+def test_snapshot_changes_only_when_files_change(tmp_path):
+    repo, service = make_service(tmp_path)
+    workspace = create_workspace(service, tmp_path / "ws" / "SEC-1", repo)
+    init_git(workspace, "SEC-1")
+
+    first = snapshot(workspace)
+    assert snapshot(workspace) == first
+
+    (workspace / "notes.txt").write_text("new file")
+    assert snapshot(workspace) != first

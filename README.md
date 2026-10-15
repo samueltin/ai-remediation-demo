@@ -46,6 +46,29 @@ Two layers, and neither trusts the agent's own report:
 Ticket text is untrusted input. Structured fields are validated strictly, and free text is
 passed to the agent inside a delimited data section that it is told to treat as data only.
 
+## Guardrails
+
+Checked by the workflow after the agent finishes, on the committed change. Any failure ends
+the run as `NEEDS_HUMAN_ATTENTION` with the reason.
+
+| # | Guardrail | Risk it controls |
+|---|---|---|
+| 1 | No changes under `src/test/` | Agent passes by weakening tests |
+| 2 | The only change to pom.xml is the ticket library's version | Hallucinated or malicious packages; tests skipped through build config |
+| 3 | Tests green within 3 agent attempts; the loop stops early when an attempt adds nothing | Endless loops and runaway cost |
+| 4 | At most 50 changed lines (configurable) | Unexpectedly wide changes |
+| 5 | Scan before and after: the ticket's finding is gone and no finding is new | Fix that does not really fix |
+| 6 | Ticket ID in branch name, commit message and summary | Lost traceability |
+| 7 | Agent transcript saved for every attempt | No audit trail |
+| 8 | Nothing merged or pushed: main is still the baseline, no remote | Bypassing human approval |
+| 9 | Same number of tests as the baseline, none skipped | Green build because tests were disabled |
+| 10 | Only existing files modified; Java changes only in the project's own package | Shadow copies of library classes |
+
+To see guardrail 1 fire, run SEC-103 with `--agent unsafe-sim`. **This is a simulation, not a
+real agent:** a short script that does what a careless agent might do (upgrade Guava, then edit
+the failing test so it compiles). The build goes green with all 15 tests, and only guardrail 1
+stops it.
+
 ## Setup
 
 ```
