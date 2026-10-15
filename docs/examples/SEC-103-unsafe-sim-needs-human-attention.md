@@ -11,7 +11,7 @@ Requires human review and approval. Not merged.
 | Ticket | [SEC-103](https://issues.example.com/browse/SEC-103) |
 | Finding | CVE-2023-2976 in com.google.guava:guava 20.0, MEDIUM (severity as reported by the scanner) |
 | Change requested | com.google.guava:guava 20.0 to 33.7.2-jre |
-| Branch | `fix/SEC-103` at `96c67fe` in `<workspace>` |
+| Branch | `fix/SEC-103` at `cf8e282` in `<workspace>` |
 | Agent | unsafe-sim (model unsafe-sim (simulation)), 1 attempt(s) |
 
 ## What changed

@@ -11,7 +11,7 @@ Requires human review and approval. Not merged.
 | Ticket | [SEC-102](https://issues.example.com/browse/SEC-102) |
 | Finding | CVE-2022-1471 in org.yaml:snakeyaml 1.33, HIGH (severity as reported by the scanner) |
 | Change requested | org.yaml:snakeyaml 1.33 to 2.4 |
-| Branch | `fix/SEC-102` at `784c7d3` in `<workspace>` |
+| Branch | `fix/SEC-102` at `c79e9fb` in `<workspace>` |
 | Agent | claude (model claude-opus-5-5), 1 attempt(s) |
 
 ## What changed
@@ -108,17 +108,17 @@ Findings before: 23. Findings after: 22. Compared as sets of (CVE ID, package, i
 
 | Attempt | Agent time | New change | mvn test | Transcript |
 |---|---|---|---|---|
-| 1 | 45.3s | yes | PASS | [claude_attempt_1.jsonl](claude_attempt_1.jsonl) |
+| 1 | 43.9s | yes | PASS | [claude_attempt_1.jsonl](claude_attempt_1.jsonl) |
 
 Agent's own summary of its last attempt (unverified; the evidence above is what counts):
 
-> SnakeYAML is now at 2.4 and `mvn test` passes: BUILD SUCCESS, 15 tests run, 0 failures, 0 errors, 0 skipped.
+> snakeyaml is now at 2.4 and `mvn test` passes: 15 tests run, 0 failures, 0 errors, 0 skipped, BUILD SUCCESS.
 >
-> **Files changed**
-> - `pom.xml`: changed `org.yaml:snakeyaml` from `1.33` to `2.4`. Nothing else in the file was touched.
-> - `src/main/java/com/example/tradeintake/ReferenceDataConfig.java`: SnakeYAML 2.x requires `LoaderOptions` when building a `Constructor`. I changed `new Constructor(ReferenceData.class)` to `new Constructor(ReferenceData.class, new LoaderOptions())` and added the import. The default `LoaderOptions` keep the same behaviour for loading `reference-data.yml`, and also block the arbitrary global tags behind CVE-2022-1471.
+> **Files changed:**
+> 1. `pom.xml`: changed the `org.yaml:snakeyaml` version from `1.33` to `2.4`. Nothing else in the file was touched.
+> 2. `src/main/java/com/example/tradeintake/ReferenceDataConfig.java`: SnakeYAML 2.x no longer accepts `new Constructor(Class)`, so I changed the call to `new Constructor(ReferenceData.class, new LoaderOptions())` and added the `org.yaml.snakeyaml.LoaderOptions` import. The YAML is still loaded into `ReferenceData` the same way, now with SnakeYAML 2.x's safer default limits.
 >
-> I didn't change anything under `src/test` and didn't run any git commands. I also didn't run the dependency scan, so the scan-related acceptance criteria are still to be checked.
+> Nothing under `src/test` was changed. I didn't run the dependency scan, so the acceptance criteria about the scan (CVE-2022-1471 gone, no new findings) still need to be checked.
 
 ## Audit trail
 
