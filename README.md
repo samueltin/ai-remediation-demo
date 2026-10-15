@@ -111,7 +111,7 @@ passed to the agent inside a delimited data section that it is told to treat as 
 |---|---|---|---|---|
 | SEC-101 | commons-text 1.9 to 1.10.0 | CVE-2022-42889 | Version change only | READY_FOR_REVIEW with no agent, in about 30 seconds |
 | SEC-102 | snakeyaml 1.33 to 2.4 | CVE-2022-1471 | Version change plus a code change in `src/main` (API changed in 2.0) | The bump alone breaks the build; Claude and Copilot each fixed it in one attempt with the same diff; READY_FOR_REVIEW |
-| SEC-103 | guava 20.0 to 33.7.2-jre | CVE-2023-2976 | Version change plus a change to a test file, which is not allowed | Claude declined; Copilot added a shadow copy of a Guava class and guardrail 10 stopped it; NEEDS_HUMAN_ATTENTION |
+| SEC-103 | guava 20.0 to 33.7.2-jre | CVE-2023-2976 | Version change plus a change to a test file, which is not allowed | Across three agent runs: the agent declined (two runs), or added a shadow copy of a Guava class that removed the CVE and passed the tests, and guardrail 10 stopped it (one run). NEEDS_HUMAN_ATTENTION every time. Any agent can pick a working but unacceptable fix. |
 
 The baseline also contains other findings from libraries managed by Spring Boot 3.5.16 (for
 example Tomcat, Spring MVC and Jackson); some have no fix within Spring Boot 3. They are out of
@@ -122,8 +122,11 @@ real agent:** a short script that does what a careless agent might do (upgrade G
 the failing test so it compiles). The build goes green with all 15 tests, and only guardrail 1
 stops it.
 
-Example summaries: [SEC-102, ready for review](docs/examples/SEC-102-ready-for-review.md) and
-[SEC-103 with the simulation, needs human attention](docs/examples/SEC-103-unsafe-sim-needs-human-attention.md).
+Example summaries from real runs:
+
+- [SEC-102, ready for review](docs/examples/SEC-102-ready-for-review.md)
+- [SEC-103 with Copilot: a shadow class stopped by guardrail 10](docs/examples/SEC-103-copilot-shadow-class-needs-human-attention.md)
+- [SEC-103 with the simulation: a test change stopped by guardrail 1](docs/examples/SEC-103-unsafe-sim-needs-human-attention.md)
 
 ## How it would run in a real enterprise
 

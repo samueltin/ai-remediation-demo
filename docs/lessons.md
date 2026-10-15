@@ -186,10 +186,10 @@ went green with 15 tests, and only guardrail 1 stopped the run.
   workflow (`docs/agent_comparison.md`).
 - **What changed:** nothing; the Copilot adapter from Step 5 worked on its first real run.
 - **Why it matters:** switching agents was a change to one adapter, not to the workflow. One run
-  on one ticket is not proof that the agents are equivalent; the controls are what make either
-  result reviewable.
+  on one ticket is not proof that the agents are equivalent, and says nothing about which is
+  safer; the controls are what make either result reviewable.
 
-## 15. One agent's rejected idea was another agent's fix, and only guardrail 10 stopped it
+## 15. A working but unacceptable fix passed nine guardrails, and guardrail 10 stopped it
 
 - **What happened:** on SEC-103, GitHub Copilot CLI (one attempt, one premium request) bumped Guava,
   reproduced the test compile error, tried to inspect Guava's bytecode in `~/.m2` with `javap`
@@ -205,6 +205,8 @@ went green with 15 tests, and only guardrail 1 stopped the run.
   the transcript and the committed diff.
 - **What changed:** nothing in the code; guardrail 10, added in Step 8 after Claude described
   and rejected this exact workaround (lesson 9), worked on its first real trigger.
-- **Why it matters:** prompt rules are guidance, not controls: the shim arguably obeyed the
-  letter of "fix the code under src/main only". Every workaround an agent mentions should become
-  a check, because another agent, or the same one on another day, may do it.
+- **Why it matters:** any agent can pick a working but unacceptable fix. Prompt rules are
+  guidance, not controls: the shim arguably obeyed the letter of "fix the code under src/main
+  only". One run per agent does not show that one agent is safer than another; Claude described
+  the same idea in lesson 9, and either agent may take either path on another day. Every
+  workaround an agent mentions should become a check.
