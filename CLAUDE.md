@@ -85,8 +85,8 @@ repo (for example `/tmp/remediation-workspaces/<ticket-id>-<timestamp>/`), initi
 there, and runs the agent in that workspace only. The baseline in `trade-intake/` always keeps
 the vulnerable versions so the demo can be re-run.
 
-The copy excludes `trade-intake/target/`: build output is not source, and Trivy would also
-scan any built jar and report findings twice.
+The copy excludes `trade-intake/target/`: build output is not source, and stale compiled classes
+can mislead the agent's own build (see docs/lessons.md).
 
 ## 5. The Sample App: trade-intake
 
@@ -194,6 +194,9 @@ Use these words in code, docs and the README. Add a term here before coining a n
   so I can defend them in an interview. Keep code simple and readable, not clever.
 - Use plain English in docs and comments. No double dashes in generated text.
 - Default to one agent. No subagents unless I ask.
+- When a real run or check teaches something, add an entry to `docs/lessons.md` in the same step
+  (what happened, how it was found, what changed, why it matters for a regulated team).
+  Record only observed findings; verify a prediction before writing it down.
 
 At the end of each step, reply in this format:
 1. A 2 to 4 point summary of what was done and what it means
