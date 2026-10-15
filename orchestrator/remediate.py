@@ -16,6 +16,7 @@ from typing import Callable
 
 from agents import AGENTS, AgentError, AgentResult, build_prompt
 from commands import CommandError, run
+from guardrails import DEFAULT_DIFF_LIMIT, check_all
 from maven import BuildEnvironmentError, BuildResult, check_java_version, describe, run_tests
 from scanner import ScanReportError, findings_for, scan
 from ticket import Ticket, TicketError, load_ticket
@@ -24,7 +25,7 @@ from workspace import WORKSPACES_ROOT, WorkspaceError, commit_change, create_wor
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUNS_DIR = REPO_ROOT / "runs"
 MAX_ATTEMPTS = 3
-TOTAL_STEPS = 9
+TOTAL_STEPS = 10
 _step_numbers = itertools.count(1)
 
 
@@ -84,7 +85,8 @@ def run_attempts(ticket: Ticket, agent_name: str,
     return attempts
 
 
-def run_workflow(ticket: Ticket, agent: str, run_id: str, run_dir: Path) -> tuple[RunOutcome, str]:
+def run_workflow(ticket: Ticket, agent: str, diff_limit: int, run_id: str,
+                 run_dir: Path) -> tuple[RunOutcome, str]:
     step("Checking that Maven runs on JDK 17")
     detail(f"Java {check_java_version(REPO_ROOT)}")
 
@@ -94,7 +96,8 @@ def run_workflow(ticket: Ticket, agent: str, run_id: str, run_dir: Path) -> tupl
 
     step("Initialising git in the workspace")
     branch = init_git(workspace, ticket.ticket_id)
-    detail(f"baseline committed on main, now on branch {branch}")
+    baseline_sha = run(["git", "rev-parse", "HEAD"], cwd=workspace).strip()
+    detail(f"baseline {baseline_sha[:7]} committed on main, now on branch {branch}")
 
     step("Scanning dependencies before the change")
     report = run_dir / "scan_before.json"
@@ -133,19 +136,29 @@ def run_workflow(ticket: Ticket, agent: str, run_id: str, run_dir: Path) -> tupl
     if not last.changed:
         return (RunOutcome.NEEDS_HUMAN_ATTENTION,
                 "the agent made no changes. See its final message above and the transcript.")
-    if not last.build.passed:
-        return (RunOutcome.NEEDS_HUMAN_ATTENTION,
-                f"mvn test still fails after {MAX_ATTEMPTS} attempts (guardrail 3).")
 
+    # Committed even when red, so the reviewer sees exactly the state the guardrails checked.
     step("Committing the agent's change on the fix branch")
     commit_change(workspace, f"{ticket.ticket_id}: {ticket.title}")
     for line in run(["git", "show", "--stat", "--format=%h %s", "HEAD"], cwd=workspace).splitlines():
         detail(line)
 
-    # Steps 7 and 8 of the build replace this ending with the guardrails, the after scan and the summary.
+    step("Checking guardrails")
+    transcripts = [run_dir / f"{agent}_attempt_{a.number}.jsonl" for a in attempts]
+    checks = check_all(ticket, workspace, baseline_sha, baseline.counts, last.build, len(attempts),
+                       MAX_ATTEMPTS, transcripts, diff_limit)
+    (run_dir / "guardrails.json").write_text(json.dumps([asdict(c) for c in checks], indent=2))
+    for check in checks:
+        detail(f"{'PASS' if check.passed else 'FAIL'}  {check.number}. {check.name}: {check.reason}")
+    failed = [c for c in checks if not c.passed]
+    if failed:
+        return (RunOutcome.NEEDS_HUMAN_ATTENTION,
+                "; ".join(f"guardrail {c.number} failed: {c.reason}" for c in failed))
+
+    # Step 8 of the build replaces this ending with the after scan (guardrail 5) and the summary.
     return (RunOutcome.NEEDS_HUMAN_ATTENTION,
-            f"tests pass after {len(attempts)} attempt(s), "
-            "but the guardrails and the after scan are not built yet.")
+            f"all guardrails pass after {len(attempts)} attempt(s), "
+            "but the after scan and the summary are not built yet.")
 
 
 def finish(outcome: RunOutcome, reason: str, run_dir: Path | None) -> int:
@@ -161,6 +174,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Remediate one security ticket in an isolated workspace.")
     parser.add_argument("ticket", type=Path, help="path to the ticket JSON file")
     parser.add_argument("--agent", required=True, choices=sorted(AGENTS), help="coding agent CLI to use")
+    parser.add_argument("--max-diff-lines", type=int, default=DEFAULT_DIFF_LIMIT,
+                        help=f"guardrail 4 limit on changed lines (default {DEFAULT_DIFF_LIMIT})")
     args = parser.parse_args(argv)
 
     run_dir = None
@@ -173,7 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         run_id = f"{ticket.ticket_id}-{datetime.now():%Y%m%d-%H%M%S}"
         run_dir = RUNS_DIR / run_id
         run_dir.mkdir(parents=True)
-        outcome, reason = run_workflow(ticket, args.agent, run_id, run_dir)
+        outcome, reason = run_workflow(ticket, args.agent, args.max_diff_lines, run_id, run_dir)
     except (TicketError, WorkspaceError, CommandError, ScanReportError, AgentError,
             BuildEnvironmentError) as error:
         outcome, reason = RunOutcome.FAILED, str(error)

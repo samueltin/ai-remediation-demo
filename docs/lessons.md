@@ -76,3 +76,28 @@ Format: what happened, how it was found, what changed, and why it matters for a 
   and stops with FAILED unless Maven runs on JDK 17.
 - **Why it matters:** a remediation verified on a different JDK than production is not verified;
   the toolchain must be checked, not assumed.
+
+## 7. The agent refused honestly, but the retry loop paid for two more refusals
+
+- **What happened:** on SEC-103 the agent upgraded Guava, saw the test compile error, and stopped
+  with "SEC-103 can't be finished within the rules", naming the one-line test fix a human should
+  approve. Attempts 2 and 3 got the build errors, changed nothing, and refused again with the same
+  reasoning. The loop did not stop, because "workspace changed" compares with the baseline, so the
+  pom change from attempt 1 still counted as a change.
+- **How it was found:** Step 7, the first real SEC-103 run, reading `attempts.json` and the three
+  transcripts (attempt 2: 2 turns, attempt 3: 3 turns, no edits in either).
+- **What changed:** recorded here; a per-attempt change check is proposed so the loop stops when an
+  attempt adds nothing new.
+- **Why it matters:** a retry policy should spend money only when the last attempt made progress;
+  an honest refusal is a result to hand to a human, not a failure to retry.
+
+## 8. The permission boundary blocked a real action, and the agent took the allowed path
+
+- **What happened:** in SEC-103 attempt 1 the agent tried to change the pom with
+  `sed -i ... pom.xml && git diff --stat && mvn -q test`. Claude Code denied it (a shell write
+  and a chained command). The agent then read pom.xml and used the Edit tool instead.
+- **How it was found:** Step 7, the `permission_denials` list in the attempt 1 transcript.
+- **What changed:** nothing; this confirms in a real run the boundary that the Step 5 probes
+  showed.
+- **Why it matters:** file changes go through the edit tool, so every change appears in the
+  transcript as a reviewable edit, not hidden inside a shell command.
