@@ -28,10 +28,12 @@ def ticket_url(ticket_id: str) -> str:
 
 
 def render_summary(*, ticket: Ticket, outcome: str, reason: str, agent: str, attempts: list[Attempt],
+                   version_bump: BuildResult | None, always_agent: bool,
                    baseline: BuildResult, checks: list[Check], comparison: ScanComparison,
                    findings_before: int, findings_after: int, diffstat: str, diff: str,
                    workspace: Path, branch: str, commit: str, transcripts: list[str]) -> str:
-    last = attempts[-1]
+    agent_used = (f"{agent} (model {attempts[-1].model}), {len(attempts)} attempt(s)" if attempts
+                  else "none (deterministic fix)")
     diff_lines = diff.splitlines()
     shown_diff = "\n".join(diff_lines[:MAX_DIFF_LINES_SHOWN])
     if len(diff_lines) > MAX_DIFF_LINES_SHOWN:
@@ -51,7 +53,7 @@ def render_summary(*, ticket: Ticket, outcome: str, reason: str, agent: str, att
         f"{ticket.severity} (severity as reported by the scanner) |",
         f"| Change requested | {ticket.library} {ticket.current_version} to {ticket.target_version} |",
         f"| Branch | `{branch}` at `{commit}` in `{workspace}` |",
-        f"| Agent | {agent} (model {last.model}), {len(attempts)} attempt(s) |",
+        f"| Agent | {agent_used} |",
         "",
         "## What changed",
         "",
@@ -63,11 +65,16 @@ def render_summary(*, ticket: Ticket, outcome: str, reason: str, agent: str, att
         shown_diff,
         "```",
         "",
+        "## Version bump alone (by the workflow)",
+        "",
+        *_version_bump_section(version_bump, bool(attempts), always_agent),
+        "",
         "## Tests (run by the workflow, not by the agent)",
         "",
         "| Run | Result | Tests run | Failed | Errors | Skipped |",
         "|---|---|---|---|---|---|",
         _test_row("Baseline (before the agent)", baseline),
+        *([_test_row("Version bump alone (by the workflow)", version_bump)] if version_bump else []),
         *[_test_row(f"Attempt {a.number}", a.build) for a in attempts],
         "",
         "## Dependency scan (Trivy)",
@@ -87,22 +94,12 @@ def render_summary(*, ticket: Ticket, outcome: str, reason: str, agent: str, att
         "|---|---|---|---|",
         *[f"| {c.number} | {c.name} | {'PASS' if c.passed else '**FAIL**'} | {_cell(c.reason)} |" for c in checks],
         "",
-        "## Agent attempts",
-        "",
-        "| Attempt | Agent time | New change | mvn test | Transcript |",
-        "|---|---|---|---|---|",
-        *[f"| {a.number} | {a.agent_seconds}s | {'yes' if a.new_change else 'no'} | "
-          f"{'PASS' if a.build.passed else 'FAIL'} | [{name}]({name}) |" for a, name in zip(attempts, transcripts)],
-        "",
-        "Agent's own summary of its last attempt (unverified; the evidence above is what counts):",
-        "",
-        *[f"> {line}" if line else ">" for line in last.final_message.strip().splitlines()],
-        "",
+        *_attempts_section(attempts, transcripts),
         "## Audit trail",
         "",
         "All files are in this run folder: the prompt for each attempt (`prompt_attempt_N.txt`), the agent",
         "transcripts, the Maven logs (`mvn_test_*.log`), `scan_before.json`, `scan_after.json`,",
-        "`attempts.json`, `baseline_tests.json` and `guardrails.json`.",
+        "`attempts.json`, `baseline_tests.json`, `version_bump.json` and `guardrails.json`.",
         "",
         "## For the reviewer",
         "",
@@ -113,6 +110,39 @@ def render_summary(*, ticket: Ticket, outcome: str, reason: str, agent: str, att
         "",
     ]
     return "\n".join(lines)
+
+
+def _version_bump_section(version_bump: BuildResult | None, agent_called: bool, always_agent: bool) -> list[str]:
+    if version_bump is None:
+        return ["The workflow could not apply the plain version bump itself, so it went straight to the agent."]
+    if not version_bump.passed:
+        return ["**The upgrade alone breaks the build.** The workflow applied only the version change and ran",
+                "mvn test before calling any agent. This is the evidence that a code change was needed.",
+                "The workspace was reset before the agent started. Key errors:",
+                "", "```", *version_bump.error_lines[:15], "```"]
+    if always_agent and agent_called:
+        return ["The plain version bump passed on its own, but the agent was called anyway because of",
+                "`--always-agent`."]
+    return ["The workflow applied only the version change, and the build and tests passed,",
+            "so no agent was needed."]
+
+
+def _attempts_section(attempts: list[Attempt], transcripts: list[str]) -> list[str]:
+    if not attempts:
+        return []
+    return [
+        "## Agent attempts",
+        "",
+        "| Attempt | Agent time | New change | mvn test | Transcript |",
+        "|---|---|---|---|---|",
+        *[f"| {a.number} | {a.agent_seconds}s | {'yes' if a.new_change else 'no'} | "
+          f"{'PASS' if a.build.passed else 'FAIL'} | [{name}]({name}) |" for a, name in zip(attempts, transcripts)],
+        "",
+        "Agent's own summary of its last attempt (unverified; the evidence above is what counts):",
+        "",
+        *[f"> {line}" if line else ">" for line in attempts[-1].final_message.strip().splitlines()],
+        "",
+    ]
 
 
 def _test_row(label: str, build: BuildResult) -> str:

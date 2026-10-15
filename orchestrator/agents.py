@@ -30,6 +30,16 @@ itself and the build failed. Continue from the current state. The build errors w
 $errors
 </build_output>
 """)
+BUMP_TEMPLATE = Template("""
+Before calling you, the workflow applied only the version change in pom.xml and ran mvn test
+itself. The build failed, so a code change under src/main is probably needed. The workspace
+has been reset to its original state, so you still need to make the version change yourself.
+The build errors were:
+
+<build_output>
+$errors
+</build_output>
+""")
 AGENT_TIMEOUT_SECONDS = 1800
 CLAUDE_MAX_BUDGET_USD = "5"
 
@@ -48,16 +58,22 @@ class AgentResult:
     model: str
 
 
-def build_prompt(ticket: Ticket, previous_errors: tuple[str, ...] = ()) -> str:
-    """The agent prompt. Ticket free text and build output only ever appear inside data sections."""
+def build_prompt(ticket: Ticket, previous_errors: tuple[str, ...] = (),
+                 bump_errors: tuple[str, ...] = ()) -> str:
+    """The agent prompt. Ticket free text and build output only ever appear inside data sections.
+
+    previous_errors come from the workflow's build after the previous attempt; bump_errors from
+    the workflow's own build of the plain version bump, before the first attempt.
+    """
     for text in (ticket.title, ticket.description, *ticket.acceptance_criteria):
         if SECTION_MARKER.search(text):
             raise TicketError(f"{ticket.ticket_id}: ticket text contains a prompt data section marker")
     previous_attempt = ""
-    if previous_errors:
-        # Build output can echo text the agent wrote, so markers are removed rather than trusted.
-        errors = "\n".join(SECTION_MARKER.sub("", line) for line in previous_errors)
-        previous_attempt = RETRY_TEMPLATE.substitute(errors=errors)
+    for template, lines in ((BUMP_TEMPLATE, bump_errors), (RETRY_TEMPLATE, previous_errors)):
+        if lines:
+            # Build output can echo text the agent wrote, so markers are removed rather than trusted.
+            errors = "\n".join(SECTION_MARKER.sub("", line) for line in lines)
+            previous_attempt += template.substitute(errors=errors)
 
     template = Template(PROMPT_TEMPLATE.read_text())
     return template.substitute(

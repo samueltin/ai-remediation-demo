@@ -67,6 +67,8 @@ def attempt_limit(attempt_count: int, last_passed: bool, max_attempts: int) -> C
         return Check(3, name, False, f"{attempt_count} attempts exceed the limit of {max_attempts}")
     if not last_passed:
         return Check(3, name, False, f"mvn test still fails after {attempt_count} attempt(s)")
+    if attempt_count == 0:
+        return Check(3, name, True, "green with the version bump alone, no agent needed")
     return Check(3, name, True, f"green after {attempt_count} attempt(s)")
 
 
@@ -106,6 +108,8 @@ def traceability(ticket_id: str, branch: str, head_subject: str) -> Check:
 
 def transcripts_saved(transcripts: list[Path]) -> Check:
     name = "Agent transcript saved for every attempt"
+    if not transcripts:
+        return Check(7, name, True, "no agent was called")
     missing = [path.name for path in transcripts if not path.is_file() or path.stat().st_size == 0]
     if missing:
         return Check(7, name, False, f"missing or empty: {', '.join(missing)}")

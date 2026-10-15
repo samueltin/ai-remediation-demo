@@ -118,3 +118,19 @@ def test_no_declined_reason_when_the_last_attempt_made_progress(tmp_path):
     attempts = run_attempts(TICKET, "fake", FakeAgent(), builds(red("broken"), GREEN), workspace, run_dir)
 
     assert declined_reason(attempts) is None
+
+
+def test_bump_errors_go_into_the_first_prompt_only(tmp_path):
+    workspace, run_dir = setup(tmp_path)
+    agent = FakeAgent()
+
+    run_attempts(TICKET, "fake", agent, builds(red("after attempt one"), GREEN), workspace, run_dir,
+                 bump_errors=("[ERROR] bump alone fails",))
+
+    assert "bump alone fails" in agent.prompts[0]
+    assert "bump alone fails" not in agent.prompts[1]
+    assert "after attempt one" in agent.prompts[1]
+
+
+def test_no_declined_reason_without_attempts():
+    assert declined_reason([]) is None

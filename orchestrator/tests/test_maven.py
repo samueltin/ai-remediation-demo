@@ -1,11 +1,14 @@
 import os
 import stat
 import sys
+from pathlib import Path
 
 import pytest
 
-from maven import (BuildEnvironmentError, SurefireCounts, error_lines, java_version, read_surefire_reports,
-                   run_tests)
+from guardrails import pom_only_ticket_version
+from maven import (BuildEnvironmentError, SurefireCounts, VersionBumpError, bump_version, error_lines, java_version,
+                   read_surefire_reports, run_tests)
+from ticket import load_ticket
 
 FAKE_MVN = """#!{python}
 import pathlib, sys
@@ -106,3 +109,67 @@ def test_output_without_error_lines_falls_back_to_the_tail():
 
     assert error_lines(output)[-1] == "line 99"
     assert len(error_lines(output)) == 40
+
+
+# The deterministic version bump
+
+POM = """<project xmlns="http://maven.apache.org/POM/4.0.0">
+    <dependencies>
+        <dependency>
+            <groupId>org.yaml</groupId>
+            <artifactId>snakeyaml</artifactId>
+            <version>1.33</version>
+        </dependency>
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>1.33</version>
+        </dependency>
+    </dependencies>
+</project>
+"""
+
+
+def test_bump_changes_only_the_ticket_library_version():
+    bumped = bump_version(POM, "org.yaml:snakeyaml", "1.33", "2.4")
+
+    changed = [(old, new) for old, new in zip(POM.splitlines(), bumped.splitlines()) if old != new]
+    assert changed == [("            <version>1.33</version>", "            <version>2.4</version>")]
+
+
+def test_bumped_pom_passes_guardrail_2():
+    ticket = load_ticket(Path(__file__).resolve().parents[2] / "tickets" / "SEC-102.json")
+
+    bumped = bump_version(POM, ticket.library, ticket.current_version, ticket.target_version)
+
+    assert pom_only_ticket_version(ticket, POM, bumped).passed
+
+
+@pytest.mark.parametrize("library, current, expected", [
+    ("org.example:missing", "1.0", "declared 0 times"),
+    ("org.yaml:snakeyaml", "1.30", "not 1.30"),
+])
+def test_bump_that_cannot_be_applied_raises(library, current, expected):
+    with pytest.raises(VersionBumpError, match=expected):
+        bump_version(POM, library, current, "9.9")
+
+
+def test_bump_refuses_a_library_declared_twice():
+    twice = POM.replace("<groupId>com.google.guava</groupId>", "<groupId>org.yaml</groupId>").replace(
+        "<artifactId>guava</artifactId>", "<artifactId>snakeyaml</artifactId>")
+
+    with pytest.raises(VersionBumpError, match="declared 2 times"):
+        bump_version(twice, "org.yaml:snakeyaml", "1.33", "2.4")
+
+
+def test_maven_help_text_is_not_an_error_line():
+    output = "\n".join([
+        "[ERROR] /ws/src/main/A.java:[20,59] incompatible types",
+        "[ERROR] -> [Help 1]",
+        "[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.",
+        "[ERROR] Re-run Maven using the -X switch to enable full debug logging.",
+        "[ERROR] For more information about the errors and possible solutions, please read the following articles:",
+        "[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException",
+    ])
+
+    assert error_lines(output) == ("[ERROR] /ws/src/main/A.java:[20,59] incompatible types",)

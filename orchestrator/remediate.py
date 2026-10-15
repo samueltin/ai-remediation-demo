@@ -17,17 +17,18 @@ from typing import Callable
 from agents import AGENTS, AgentError, AgentResult, build_prompt
 from commands import CommandError, run
 from guardrails import DEFAULT_DIFF_LIMIT, check_all
-from maven import BuildEnvironmentError, BuildResult, check_java_version, describe, run_tests
+from maven import (BuildEnvironmentError, BuildResult, VersionBumpError, bump_version, check_java_version,
+                   describe, run_tests)
 from scanner import ScanReportError, compare, findings_for, scan
 from summary import render_summary
 from ticket import Ticket, TicketError, load_ticket
 from workspace import (WORKSPACES_ROOT, WorkspaceError, commit_change, create_workspace, has_changes, init_git,
-                       snapshot)
+                       reset_workspace, snapshot)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUNS_DIR = REPO_ROOT / "runs"
 MAX_ATTEMPTS = 3
-TOTAL_STEPS = 12
+TOTAL_STEPS = 13
 _step_numbers = itertools.count(1)
 
 
@@ -60,7 +61,7 @@ def detail(message: str) -> None:
 def run_attempts(ticket: Ticket, agent_name: str,
                  run_agent: Callable[[Path, str, Path], AgentResult],
                  test_build: Callable[[Path, Path], BuildResult],
-                 workspace: Path, run_dir: Path) -> list[Attempt]:
+                 workspace: Path, run_dir: Path, bump_errors: tuple[str, ...] = ()) -> list[Attempt]:
     """Runs the agent, then the tests, up to MAX_ATTEMPTS times (guardrail 3).
 
     Stops at the first green build, or when an attempt adds no new change: an agent that
@@ -70,7 +71,7 @@ def run_attempts(ticket: Ticket, agent_name: str,
     attempts: list[Attempt] = []
     previous_errors: tuple[str, ...] = ()
     for number in range(1, MAX_ATTEMPTS + 1):
-        prompt = build_prompt(ticket, previous_errors)
+        prompt = build_prompt(ticket, previous_errors, bump_errors if number == 1 else ())
         (run_dir / f"prompt_attempt_{number}.txt").write_text(prompt)
         detail(f"attempt {number}: running {agent_name}")
         before = snapshot(workspace)
@@ -93,13 +94,32 @@ def run_attempts(ticket: Ticket, agent_name: str,
 
 
 def declined_reason(attempts: list[Attempt]) -> str | None:
-    last = attempts[-1]
-    if not last.new_change:
-        return f"agent declined, no new change in attempt {last.number}"
+    if attempts and not attempts[-1].new_change:
+        return f"agent declined, no new change in attempt {attempts[-1].number}"
     return None
 
 
-def run_workflow(ticket: Ticket, agent: str, diff_limit: int, run_id: str,
+def try_version_bump(ticket: Ticket, workspace: Path, run_dir: Path) -> BuildResult | None:
+    """Applies only the version change and runs the clean build and tests. None if it cannot be applied."""
+    pom = workspace / "pom.xml"
+    try:
+        bumped = bump_version(pom.read_text(), ticket.library, ticket.current_version, ticket.target_version)
+    except VersionBumpError as error:
+        detail(f"cannot apply the plain version bump: {error}")
+        return None
+    pom.write_text(bumped)
+    result = run_tests(workspace, run_dir / "mvn_test_version_bump.log")
+    (run_dir / "version_bump.json").write_text(json.dumps(asdict(result), indent=2))
+    detail(f"{ticket.library} {ticket.current_version} -> {ticket.target_version}: mvn test "
+           f"{'PASS' if result.passed else 'FAIL'} ({describe(result.counts)}) in {result.duration_seconds}s")
+    if not result.passed:
+        detail("the upgrade alone breaks the build:")
+        for line in result.error_lines[:5]:
+            detail(f"  {line}")
+    return result
+
+
+def run_workflow(ticket: Ticket, agent: str, always_agent: bool, diff_limit: int, run_id: str,
                  run_dir: Path) -> tuple[RunOutcome, str]:
     step("Checking that Maven runs on JDK 17")
     detail(f"Java {check_java_version(REPO_ROOT)}")
@@ -141,18 +161,32 @@ def run_workflow(ticket: Ticket, agent: str, diff_limit: int, run_id: str,
                 f"the baseline is not green before any change ({describe(baseline.counts)}). "
                 "Fix the baseline first.")
 
-    step(f"Running the agent and the tests (at most {MAX_ATTEMPTS} attempts)")
-    attempts = run_attempts(ticket, agent, AGENTS[agent], run_tests, workspace, run_dir)
-    last = attempts[-1]
-    detail("agent's final message:")
-    for line in last.final_message.strip().splitlines():
-        detail(f"  | {line}")
-    if not last.changed:
-        return (RunOutcome.NEEDS_HUMAN_ATTENTION,
-                f"{declined_reason(attempts)}; the workspace is unchanged. See the agent's final message.")
+    # Deterministic first, AI second: many upgrades need nothing more than the version change.
+    step("Trying the plain version bump, without an agent")
+    version_bump = try_version_bump(ticket, workspace, run_dir)
+
+    attempts: list[Attempt] = []
+    if version_bump is not None and version_bump.passed and not always_agent:
+        step("Agent not needed: the version bump alone builds and passes the tests")
+        final_build = version_bump
+    else:
+        if version_bump is not None:
+            reset_workspace(workspace)
+            detail("workspace reset to the baseline before calling the agent")
+        bump_errors = version_bump.error_lines if version_bump is not None and not version_bump.passed else ()
+        step(f"Running the agent and the tests (at most {MAX_ATTEMPTS} attempts)")
+        attempts = run_attempts(ticket, agent, AGENTS[agent], run_tests, workspace, run_dir, bump_errors)
+        last = attempts[-1]
+        detail("agent's final message:")
+        for line in last.final_message.strip().splitlines():
+            detail(f"  | {line}")
+        if not last.changed:
+            return (RunOutcome.NEEDS_HUMAN_ATTENTION,
+                    f"{declined_reason(attempts)}; the workspace is unchanged. See the agent's final message.")
+        final_build = last.build
 
     # Committed even when red, so the reviewer sees exactly the state the guardrails checked.
-    step("Committing the agent's change on the fix branch")
+    step("Committing the change on the fix branch")
     commit_change(workspace, f"{ticket.ticket_id}: {ticket.title}")
     for line in run(["git", "show", "--stat", "--format=%h %s", "HEAD"], cwd=workspace).splitlines():
         detail(line)
@@ -166,7 +200,7 @@ def run_workflow(ticket: Ticket, agent: str, diff_limit: int, run_id: str,
 
     step("Checking guardrails")
     transcripts = [run_dir / f"{agent}_attempt_{a.number}.jsonl" for a in attempts]
-    checks = check_all(ticket, workspace, baseline_sha, baseline.counts, last.build, len(attempts),
+    checks = check_all(ticket, workspace, baseline_sha, baseline.counts, final_build, len(attempts),
                        MAX_ATTEMPTS, transcripts, diff_limit, comparison)
     (run_dir / "guardrails.json").write_text(json.dumps([asdict(c) for c in checks], indent=2))
     for check in checks:
@@ -176,15 +210,19 @@ def run_workflow(ticket: Ticket, agent: str, diff_limit: int, run_id: str,
         problems.insert(0, declined_reason(attempts))
     if problems:
         outcome, reason = RunOutcome.NEEDS_HUMAN_ATTENTION, "; ".join(problems)
+    elif attempts:
+        outcome, reason = RunOutcome.READY_FOR_REVIEW, f"all guardrails pass after {len(attempts)} attempt(s)"
     else:
-        outcome, reason = (RunOutcome.READY_FOR_REVIEW,
-                           f"all guardrails pass after {len(attempts)} attempt(s)")
+        outcome, reason = RunOutcome.READY_FOR_REVIEW, "all guardrails pass with the version bump alone, no agent"
 
     step("Writing the merge request summary")
+
     def git(*args: str) -> str:
         return run(["git", *args], cwd=workspace)
+
     summary = render_summary(
         ticket=ticket, outcome=outcome.name, reason=reason, agent=agent, attempts=attempts,
+        version_bump=version_bump, always_agent=always_agent,
         baseline=baseline, checks=checks, comparison=comparison,
         findings_before=len(findings), findings_after=len(findings_after),
         diffstat=git("diff", "--stat", "main", "HEAD"), diff=git("diff", "main", "HEAD"),
@@ -211,6 +249,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("ticket", type=Path, help="path to the ticket JSON file")
     parser.add_argument("--agent", required=True, choices=sorted(AGENTS),
                         help="coding agent CLI to use (unsafe-sim is a simulated misbehaving agent)")
+    parser.add_argument("--always-agent", action="store_true",
+                        help="call the agent even when the plain version bump already passes")
     parser.add_argument("--max-diff-lines", type=int, default=DEFAULT_DIFF_LIMIT,
                         help=f"guardrail 4 limit on changed lines (default {DEFAULT_DIFF_LIMIT})")
     args = parser.parse_args(argv)
@@ -225,7 +265,8 @@ def main(argv: list[str] | None = None) -> int:
         run_id = f"{ticket.ticket_id}-{datetime.now():%Y%m%d-%H%M%S}"
         run_dir = RUNS_DIR / run_id
         run_dir.mkdir(parents=True)
-        outcome, reason = run_workflow(ticket, args.agent, args.max_diff_lines, run_id, run_dir)
+        outcome, reason = run_workflow(ticket, args.agent, args.always_agent, args.max_diff_lines,
+                                       run_id, run_dir)
     except (TicketError, WorkspaceError, CommandError, ScanReportError, AgentError,
             BuildEnvironmentError) as error:
         outcome, reason = RunOutcome.FAILED, str(error)

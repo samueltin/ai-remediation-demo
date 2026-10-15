@@ -112,6 +112,12 @@ can mislead the agent's own build (see docs/lessons.md).
 | 9 | Tests run must equal the baseline count and none may be skipped (read from the Surefire reports by the orchestrator) | Green build because tests were disabled, not because they passed |
 | 10 | Only existing files may be modified (no added, deleted or renamed files), and every changed .java file must be in the package `com.example.tradeintake` | Shadow classes: a copy of a library class in src/main overrides the real one and passes every other guardrail |
 
+Deterministic first, AI second: after the baseline, the orchestrator applies the plain version bump
+itself and runs the clean build and tests. If they pass, no agent is called (the same guardrails and
+after scan still apply; the summary says "Agent: none (deterministic fix)"). If they fail, the error
+is recorded in the summary as evidence, the workspace is reset, and the agent gets the error in its
+first prompt. `--always-agent` forces the agent even when the bump alone passes.
+
 Attempt loop: it stops early when an attempt adds no new change ("agent declined, no new change in
 attempt N"), because a declining agent will only decline again.
 

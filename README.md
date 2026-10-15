@@ -32,6 +32,13 @@ and each ticket targets one finding. The workflow therefore compares scans befor
 after as sets of (CVE ID, package, installed version): the ticket's finding must be gone
 and no finding may be new. It never compares counts.
 
+## Deterministic first, AI second
+
+Before any agent is called, the workflow applies the plain version bump itself and runs the
+build and tests. If they pass (SEC-101), no agent is used. If they fail (SEC-102), the error is
+kept as evidence that a code change is needed, and the agent starts from it. Use
+`--always-agent` to call the agent anyway. Example summaries are in `docs/examples/`.
+
 ## Safety model
 
 Two layers, and neither trusts the agent's own report:

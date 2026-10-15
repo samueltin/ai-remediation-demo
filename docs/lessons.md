@@ -155,3 +155,22 @@ went green with 15 tests, and only guardrail 1 stopped the run.
 - **What changed:** nothing; this is the behaviour we want, and the summary shows it in one table.
 - **Why it matters:** "it works" is not the approval criterion; a change to the tests that judge
   the change needs a human, however reasonable it looks.
+
+## 13. Deterministic first, AI second
+
+- **What happened:** before calling any agent, the workflow now applies the plain version bump
+  itself and runs the clean build, the tests and the after scan. SEC-101 then needed no agent at
+  all: READY_FOR_REVIEW in 29 seconds at no model cost, with the same ten guardrails. With
+  `--always-agent` the same ticket took 86 seconds and 0.10 USD for an identical one-line diff.
+  For SEC-102 the bump alone failed in 4 seconds with the real compile error
+  (`ReferenceDataConfig.java:[20,59] incompatible types`). That error is recorded in the summary
+  as evidence that a code change was needed, and the agent received it in its first prompt; it
+  went straight to the fix (read two files, three edits, two test runs).
+- **How it was found:** lesson 11 showed the compile failure was not guaranteed to appear in the
+  agent's transcript, so the workflow now produces it itself. The runs above confirmed it.
+- **What changed:** a deterministic first step (`try_version_bump`), `--always-agent` to force the
+  agent, "Agent: none (deterministic fix)" in the summary, and Maven's generic help text removed
+  from the error lines given to the agent and the reviewer.
+- **Why it matters:** the cheapest, most predictable and most auditable change is the one no model
+  made; the agent is for the part a script cannot do, and the reviewer gets evidence of why it was
+  needed.

@@ -2,7 +2,8 @@ import subprocess
 
 import pytest
 
-from workspace import WorkspaceError, commit_change, create_workspace, has_changes, init_git, snapshot
+from workspace import (WorkspaceError, commit_change, create_workspace, has_changes, init_git, reset_workspace,
+                       snapshot)
 
 
 def make_service(tmp_path):
@@ -98,3 +99,16 @@ def test_snapshot_changes_only_when_files_change(tmp_path):
 
     (workspace / "notes.txt").write_text("new file")
     assert snapshot(workspace) != first
+
+
+def test_reset_returns_the_workspace_to_the_last_commit(tmp_path):
+    repo, service = make_service(tmp_path)
+    workspace = create_workspace(service, tmp_path / "ws" / "SEC-1", repo)
+    init_git(workspace, "SEC-1")
+    (workspace / "pom.xml").write_text("<project>bumped</project>")
+    (workspace / "Extra.java").write_text("class Extra {}")
+
+    reset_workspace(workspace)
+
+    assert not has_changes(workspace)
+    assert (workspace / "pom.xml").read_text() == "<project/>"

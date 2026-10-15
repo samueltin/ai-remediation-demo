@@ -22,6 +22,33 @@ class BuildEnvironmentError(RuntimeError):
     pass
 
 
+class VersionBumpError(ValueError):
+    pass
+
+
+# Maven's standard advice after any failure; it says nothing about this failure.
+_MAVEN_HELP_TEXT = re.compile(r"\[Help \d+\]|re-run Maven|Re-run Maven|For more information about the errors")
+_DEPENDENCY = re.compile(r"<dependency>.*?</dependency>", re.DOTALL)
+_VERSION = re.compile(r"<version>([^<]*)</version>")
+
+
+def bump_version(pom_text: str, library: str, current_version: str, target_version: str) -> str:
+    """The plain version change the ticket asks for, as a text edit that keeps all other formatting."""
+    group_id, artifact_id = library.split(":")
+    blocks = [block for block in _DEPENDENCY.finditer(pom_text)
+              if re.search(rf"<groupId>\s*{re.escape(group_id)}\s*</groupId>", block.group())
+              and re.search(rf"<artifactId>\s*{re.escape(artifact_id)}\s*</artifactId>", block.group())]
+    if len(blocks) != 1:
+        raise VersionBumpError(f"{library} is declared {len(blocks)} times in pom.xml, expected once")
+    block = blocks[0]
+    version = _VERSION.search(block.group())
+    found = version.group(1).strip() if version else "no version"
+    if found != current_version:
+        raise VersionBumpError(f"{library} is at {found} in pom.xml, not {current_version}")
+    start = block.start() + version.start(1) + version.group(1).index(found)
+    return pom_text[:start] + target_version + pom_text[start + len(found):]
+
+
 @dataclass(frozen=True)
 class SurefireCounts:
     run: int
@@ -85,7 +112,8 @@ def read_surefire_reports(folder: Path) -> SurefireCounts:
 def error_lines(output: str) -> tuple[str, ...]:
     """The [ERROR] lines of a Maven run, once each and in order, to feed back to the agent."""
     lines = output.splitlines()
-    errors = [line for line in lines if line.startswith("[ERROR]") and line[len("[ERROR]"):].strip()]
+    errors = [line for line in lines if line.startswith("[ERROR]") and line[len("[ERROR]"):].strip()
+              and not _MAVEN_HELP_TEXT.search(line)]
     if not errors:
         return tuple(lines[-TAIL_LINES:])
     return tuple(dict.fromkeys(errors))[:MAX_ERROR_LINES]

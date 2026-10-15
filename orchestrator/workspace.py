@@ -63,6 +63,12 @@ def snapshot(workspace: Path) -> str:
     return run(["git", "write-tree"], cwd=workspace).strip()
 
 
+def reset_workspace(workspace: Path) -> None:
+    """Discards every uncommitted change. Ignored files such as target/ are left alone."""
+    run(["git", "reset", "--hard", "--quiet", "HEAD"], cwd=workspace)
+    run(["git", "clean", "-fd", "--quiet"], cwd=workspace)
+
+
 def has_changes(workspace: Path) -> bool:
     return bool(run(["git", "status", "--porcelain"], cwd=workspace).strip())
 

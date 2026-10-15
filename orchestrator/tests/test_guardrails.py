@@ -260,3 +260,19 @@ def test_new_finding_fails_even_when_the_ticket_finding_is_gone():
 
     assert not check.passed
     assert "CVE-2099-0001 in org.yaml:snakeyaml 2.4" in check.reason
+
+
+# Deterministic fix: no agent attempts
+
+def test_green_with_no_agent_attempts_passes_guardrail_3():
+    check = attempt_limit(0, last_passed=True, max_attempts=3)
+
+    assert check.passed
+    assert "version bump alone" in check.reason
+
+
+def test_no_transcript_is_needed_when_no_agent_was_called():
+    check = transcripts_saved([])
+
+    assert check.passed
+    assert "no agent was called" in check.reason
