@@ -174,3 +174,16 @@ went green with 15 tests, and only guardrail 1 stopped the run.
 - **Why it matters:** the cheapest, most predictable and most auditable change is the one no model
   made; the agent is for the part a script cannot do, and the reviewer gets evidence of why it was
   needed.
+
+## 14. Two different agents produced the same fix, and the workflow did not change
+
+- **What happened:** SEC-102 with GitHub Copilot CLI (model gpt-6-luna) reached READY_FOR_REVIEW in
+  one attempt, with a diff identical to Claude Code's. The paths differed: Claude used the
+  compile error from the deterministic step and fixed the code before testing; Copilot bumped the
+  pom, reproduced the compile error with `mvn test`, then fixed it. Claude had one permission
+  denial (a chained `xargs` command), Copilot none.
+- **How it was found:** Step 9, one Copilot run compared with the latest Claude run of the same
+  workflow (`docs/agent_comparison.md`).
+- **What changed:** nothing; the Copilot adapter from Step 5 worked on its first real run.
+- **Why it matters:** the value is in the controls around the agent, so a team can switch or add
+  an approved agent without re-validating the workflow, only the adapter.
