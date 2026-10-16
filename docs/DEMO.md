@@ -1,9 +1,8 @@
 # Demo: an AI agent fixes security findings, independent controls decide
 
-This page replaces a video. In about five minutes you will see three real runs of the workflow,
-with their real output. First a security fix that needs no AI at all, then a fix that an AI
-agent makes and the controls accept, and finally a fix that works but that the controls stop
-and hand to a human.
+In about five minutes you will see three real runs of the workflow, with their real output.
+First a security fix that needs no AI at all, then a fix that an AI agent makes and the
+controls accept, and finally a fix that works but that the controls stop and hand to a human.
 
 ## 1. The problem
 
@@ -65,6 +64,8 @@ MEDIUM    CVE-2023-2976    com.google.guava:guava 20.0 -> 32.0.0-android
 CRITICAL  CVE-2022-42889   org.apache.commons:commons-text 1.9 -> 1.10.0
 HIGH      CVE-2022-1471    org.yaml:snakeyaml 1.33 -> 2.0
 ```
+
+The arrow shows the first fixed version. Each ticket targets a current release instead.
 
 The full scan has 23 findings. The other 20 come from libraries that the Spring Boot platform
 brings in and are out of scope for these tickets. The workflow compares findings before and
@@ -151,7 +152,7 @@ ticket (`fix/SEC-102`), writes a merge request summary with all the evidence abo
 A guardrail checks that the main branch is untouched and that there is no remote to push to.
 A developer reviews the summary and the diff, and approves or rejects the change.
 
-Requires human review and approval. Not merged.
+> Requires human review and approval. Not merged.
 
 ## 7. The real catch: SEC-103
 
@@ -186,7 +187,7 @@ two methods.*
 
 Guardrail 10 existed because of an earlier run (2026-10-15 at 09:30). There, a different agent
 described the same idea and rejected it: "That would replace Guava's own class with a project
-copy, which is exactly the kind of workaround the rules forbid." We turned that sentence into a
+copy, which is exactly the kind of workaround the rules forbid." I turned that sentence into a
 check: the agent may only change existing files, and only Java code in the service's own
 package (lessons 9 and 15). The first real attempt was caught.
 
@@ -200,6 +201,12 @@ the same agent can behave differently from one run to the next.
 That is why the controls sit outside the agent. The workflow ran the same isolation, tests,
 scans and guardrails for Claude Code and for GitHub Copilot CLI. Switching between them meant
 changing one adapter, not the workflow. The reviewer gets the same evidence either way.
+
+This is a prototype: one service, three tickets and a handful of runs per agent. It shows the
+controls working, not a benchmark of the agents.
+
+In a real team, this would run as a CI job triggered from the security ticket; see the README for
+[how it would run in a real enterprise](../README.md#how-it-would-run-in-a-real-enterprise).
 
 The agent is replaceable. The controls are not.
 
