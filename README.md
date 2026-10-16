@@ -7,6 +7,8 @@ a full audit trail and a human who approves every change. The workflow never mer
 The coding agent is replaceable (Claude Code or GitHub Copilot CLI). The value is the
 controlled workflow around it.
 
+**[Read the 5-minute demo](docs/DEMO.md)**: three real runs with their real output, nothing to install.
+
 ## The problem
 
 Dependency scanners report a steady stream of vulnerable libraries in Java services. Most
