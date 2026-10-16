@@ -79,8 +79,8 @@ was needed, and the agent starts from it. `--always-agent` calls the agent anywa
 Two layers, and neither trusts the agent's own report:
 
 - **Permissions limit what the agent can do.** It runs in a copy of the service outside this
-  repository, may only edit files there and run `mvn`, and has no network or git access
-  through its tools. These limits were tested with probe prompts, not assumed from flag names.
+  repository, may only edit files there and run `mvn`, and has no network access and cannot write
+  to git. These limits were tested with probe prompts, not assumed from flag names.
 - **Guardrails verify what it actually changed.** After the agent finishes, the workflow
   runs the tests itself, inspects the git diff, compares the test count with the baseline
   and scans again. Any failure stops the run for a human.
@@ -202,7 +202,7 @@ Other limits:
 
 - [docs/lessons.md](docs/lessons.md): what each real run taught us, and what changed because of it.
 - [docs/agent_comparison.md](docs/agent_comparison.md): Claude Code and Copilot CLI on SEC-102 and SEC-103.
-- [docs/examples/](docs/examples/): two merge request summaries from real runs.
+- [docs/examples/](docs/examples/): three merge request summaries from real runs.
 
 ## Repository layout
 
