@@ -2,7 +2,7 @@
 
 In about five minutes you will see three real runs of the workflow, with their real output.
 First a security fix that needs no AI at all. Then a fix that an AI agent makes and the checks
-accept. Last, a fix that works but is not safe, so the checks stop it and ask a person.
+accept. Last, a fix that works but is not safe, so the guardrails stop it and ask human person to review.
 
 ## 1. The problem
 
@@ -205,7 +205,7 @@ sentence into a check (lessons 9 and 15). Later, the first time an agent really 
   in one attempt.
 - **But a change can pass every test and still be wrong.** In SEC-103, the agent's change worked
   and passed the tests, but it was not safe. Rules in the prompt did not prevent it.
-- **So the checks must sit outside the agent.** The agent cannot change them, and a person
+- **So the guardrails must sit outside the agent.** The agent cannot change them, and a person
   approves every change.
 
 The agent can be swapped for another one by changing one small adapter. The checks stay the
