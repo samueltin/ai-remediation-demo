@@ -208,13 +208,10 @@ sentence into a check (lessons 9 and 15). Later, the first time an agent really 
 - **So the checks must sit outside the agent.** The agent cannot change them, and a person
   approves every change.
 
-This does not show that one agent is better or safer than another. Both the good idea and the
-bad idea came from agents, and the same agent can behave differently from one run to the next.
-The workflow ran the same checks for Claude Code and for GitHub Copilot CLI. Switching between
-them meant changing one small adapter, not the workflow.
+The agent can be swapped for another one by changing one small adapter. The checks stay the
+same.
 
-This is a prototype: one service, three tickets and a handful of runs per agent. It shows the
-checks working. It is not a test of which agent is better.
+This is a prototype: one service and three tickets. It shows the checks working.
 
 In a real team, this would run as a CI job (an automatic pipeline job) started from the security
 ticket. See the README:
@@ -223,5 +220,4 @@ ticket. See the README:
 The agent is replaceable. The controls are not.
 
 **Read more:** [README](../README.md) (how it works and how to run it),
-[lessons learned](lessons.md), [agent comparison](agent_comparison.md),
-[example summaries](examples/).
+[lessons learned](lessons.md), [example summaries](examples/).
