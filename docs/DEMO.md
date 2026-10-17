@@ -2,7 +2,9 @@
 
 > **The objective is not maximum AI autonomy. It is maximum safe automation.**
 
-This five-minute demo shows how a regulated engineering team could use an AI coding agent to help remediate dependency vulnerabilities without trusting the agent to decide whether its own work is acceptable.
+This five-minute demo uses cyber remediation as a concrete experiment in how a regulated engineering team could introduce AI coding agents into an existing software delivery process without transferring control of testing, verification or approval to the agent.
+
+Cyber remediation is the starting use case rather than the limit of the idea. It provides clear inputs and measurable outcomes — a vulnerability, a dependency, a target version, a build, tests and an independent security scan — making it a useful environment for exploring how AI can safely participate in day-to-day engineering work.
 
 The key design principle is simple:
 
@@ -336,7 +338,58 @@ This makes the verification ticket-specific and resistant to misleading changes 
 
 ---
 
-## 10. What changes in a real enterprise
+## 10. From individual AI usage to engineering capability
+
+Many engineering organisations are already using coding assistants at the individual developer level. Some developers use them extensively, while others use them only occasionally or not at all.
+
+The next challenge is different: **turning individual productivity gains into repeatable team-level engineering capability.**
+
+That requires more than giving every developer access to a coding agent. A team needs to decide:
+
+- Which development activities are suitable for deterministic automation, AI assistance or agentic execution.
+- What repository, ticket, documentation and runtime context an agent may access.
+- Which actions the agent is permitted to perform.
+- Which existing engineering tools independently verify the resulting change.
+- What evidence must be retained for review and audit.
+- Where human approval remains mandatory.
+
+This remediation prototype is one small experiment in that direction.
+
+The important shift is from:
+
+```text
+Developer -> Coding Assistant -> Code
+```
+
+to a controlled engineering workflow:
+
+```text
+Ticket / Engineering Task
+          |
+          v
+   AI Orchestration
+     /    |     \
+    /     |      \
+Context  Agent  Existing Automation
+    \     |      /
+     \    |     /
+      Candidate Change
+            |
+            v
+ Build / Tests / Scans
+            |
+            v
+ Independent Guardrails
+            |
+            v
+ Evidence for Engineer Review
+```
+
+The objective is not to replace experienced engineers with an agent. It is to reduce repetitive engineering effort and let experienced engineers spend more of their time on decisions that genuinely require engineering judgement.
+
+---
+
+## 11. What changes in a real enterprise
 
 This repository is deliberately a prototype, but the control model maps naturally to an enterprise delivery pipeline.
 
@@ -369,9 +422,36 @@ Key production controls would include:
 
 The AI remediation workflow prepares a candidate change. It does not replace the software delivery governance around that change.
 
+Cyber remediation is also a practical starting point for a broader adoption path. Once the organisation has learned how to constrain agents, verify their output and retain evidence, the same pattern can be extended incrementally:
+
+```text
+Cyber remediation
+       |
+       v
+Automated dependency and system upgrades
+       |
+       v
+Code migration and technical-debt remediation
+       |
+       v
+Requirements-to-code workflows
+       |
+       v
+Automated test generation and execution
+       |
+       v
+Integration with ticketing, source control
+and engineering knowledge systems
+       |
+       v
+Broader controlled SDLC orchestration
+```
+
+The goal is not to replace the existing SDLC with an AI agent. It is to insert AI into carefully selected parts of the SDLC while keeping independent verification, evidence collection and approval outside the agent's control.
+
 ---
 
-## 11. What the three runs demonstrate
+## 12. What the three runs demonstrate
 
 **SEC-101 — Automation beats unnecessary AI.**  
 A deterministic version bump is enough, so the workflow does not call an agent.
