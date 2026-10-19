@@ -2,7 +2,7 @@
 
 > **The objective is not maximum AI autonomy. It is maximum safe automation.**
 
-This five-minute demo uses cyber remediation as a concrete experiment in how a regulated engineering team could introduce AI coding agents into an existing software delivery process without transferring control of testing, verification or approval to the agent.
+This short demo uses cyber remediation as a concrete experiment in how a regulated engineering team could introduce AI coding agents into an existing software delivery process without transferring control of testing, verification or approval to the agent.
 
 Cyber remediation is the starting use case rather than the limit of the idea. It provides clear inputs and measurable outcomes — a vulnerability, a dependency, a target version, a build, tests and an independent security scan — making it a useful environment for exploring how AI can safely participate in day-to-day engineering work.
 
@@ -38,7 +38,7 @@ flowchart TD
     D --> E[Baseline tests]
     E --> F[Try deterministic version bump]
     F -->|passes| H[Candidate change]
-    F -->|fails| G[AI agent attempts remediation]
+    F -->|fails| G[AI Coding Agent<br/>proposes remediation]
     G --> H
     H --> I[Independent build and tests]
     I --> J[Scan after]
@@ -47,7 +47,21 @@ flowchart TD
     K -->|fail| M[NEEDS_HUMAN_ATTENTION]
     L --> N[Human review]
     M --> N
+
+    classDef workflow fill:#dbeafe,stroke:#2563eb,stroke-width:2px,color:#172554
+    classDef agent fill:#fef3c7,stroke:#d97706,stroke-width:3px,color:#451a03
+    classDef human fill:#dcfce7,stroke:#16a34a,stroke-width:2px,color:#052e16
+    classDef input fill:#f3f4f6,stroke:#6b7280,stroke-width:2px,color:#111827
+    classDef outcome fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#2e1065
+
+    class A input
+    class B,C,D,E,F,H,I,J,K workflow
+    class G agent
+    class L,M outcome
+    class N human
 ```
+
+**Trust model:** 🔵 Workflow / deterministic control plane · 🟠 AI coding agent · 🟣 Workflow outcome · 🟢 Human authority · ⚪ External / untrusted input
 
 There are three trust zones.
 
